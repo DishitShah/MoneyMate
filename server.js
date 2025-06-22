@@ -10,6 +10,12 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
 
+import session from 'express-session';
+import passport from 'passport';
+import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+
+
+
 // 🔧 Configuration
 dotenv.config();
 const app = express();
@@ -27,6 +33,15 @@ app.use(
 );
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// --- Google OAuth Session/Passport Setup ---
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'super-secret-session',
+  resave: false,
+  saveUninitialized: true,
+}));
+app.use(passport.initialize());
+app.use(passport.session());
 
 // 🗄️ Database Connection
 const connectDB = async () => {
@@ -55,6 +70,7 @@ const userSchema = new mongoose.Schema(
     },
     password: { type: String, required: true, minlength: 6 },
     avatar: { type: String, default: '👤' },
+    googleId: { type: String, default: '' }, // Google OAuth support
     xp: { type: Number, default: 0 },
     level: { type: Number, default: 1 },
     streak: { type: Number, default: 0 },
@@ -157,27 +173,70 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
+// --- Google OAuth Logic ---
+passport.serializeUser((user, done) => done(null, user.id));
+passport.deserializeUser(async (id, done) => {
+  try {
+    const user = await User.findById(id);
+    done(null, user);
+  } catch (err) {
+    done(err, null);
+  }
+});
+
+passport.use(new GoogleStrategy(
+  {
+    clientID: process.env.GOOGLE_CLIENT_ID, // Place your client ID in .env
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET, // Place your secret in .env
+    callbackURL: '/api/auth/google/callback',
+  },
+  async (accessToken, refreshToken, profile, done) => {
+    try {
+      let user = await User.findOne({ googleId: profile.id });
+      if (!user) {
+        user = new User({
+          googleId: profile.id,
+          name: profile.displayName,
+          email: profile.emails?.[0]?.value || '',
+          avatar: profile.photos?.[0]?.value || '👤',
+          password: await bcrypt.hash(Math.random().toString(36), 10), // random password so schema is valid
+        });
+        await user.save();
+      }
+      return done(null, user);
+    } catch (err) {
+      return done(err, null);
+    }
+  }
+));
+
+// --- Google OAuth Routes ---
+app.get('/api/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+
+app.get('/api/auth/google/callback',
+  passport.authenticate('google', { failureRedirect: '/' }),
+  async (req, res) => {
+    // Issue JWT on successful Google login and redirect to frontend with token
+    const token = jwt.sign({ id: req.user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?token=${token}`);
+  }
+);
+
 // 🎯 Helper Functions
 const calculateLevel = (xp) => Math.floor(xp / 1000) + 1;
-
-const calculateProgress = (current, target) =>
-  Math.min((current / target) * 100, 100);
-
+const calculateProgress = (current, target) => Math.min((current / target) * 100, 100);
 const getDaysRemaining = (targetDate) => {
   const today = new Date();
   const target = new Date(targetDate);
   const diffTime = target - today;
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 };
-
 const addXP = async (userId, points, reason) => {
   try {
     const user = await User.findById(userId);
     const oldLevel = user.level;
     user.xp += points;
     user.level = calculateLevel(user.xp);
-
-    // Level up badge
     if (user.level > oldLevel) {
       user.badges.push({
         name: `Level ${user.level} Achieved`,
@@ -185,13 +244,15 @@ const addXP = async (userId, points, reason) => {
         earnedAt: new Date(),
       });
     }
-
     await user.save();
     return { levelUp: user.level > oldLevel, newLevel: user.level };
   } catch (error) {
     console.error('🔴 Add XP Error:', error.message);
   }
 };
+
+
+
 
 // 🚀 API Routes
 
@@ -206,6 +267,7 @@ app.get('/api/ping', (req, res) => {
 });
 
 // 🔑 Authentication Routes
+
 
 // Register User
 app.post('/api/auth/signup', async (req, res) => {
@@ -343,6 +405,30 @@ app.post('/api/auth/login', async (req, res) => {
       success: false,
       message: 'Server error during login',
     });
+  }
+});
+
+//forget password
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email and new password are required.' });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'No user found with this email.' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(password, salt);
+    await user.save();
+
+    res.json({ success: true, message: 'Password has been changed. You can now log in.' });
+  } catch (error) {
+    console.error('Forgot Password Error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error changing password.' });
   }
 });
 
@@ -1170,5 +1256,4 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-// Start the server
 startServer();

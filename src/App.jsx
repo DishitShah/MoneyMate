@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Header from './components/Header';
 import Landing from './pages/Landing';
 import Dashboard from './pages/Dashboard';
@@ -16,6 +16,12 @@ import FloatingActionButton from './components/FloatingActionButton';
 import MoneyMateComingSoon from './components/MoneyMetComingSoon';
 import './styles/App.css';
 
+// --- Add PrivateRoute ---
+const PrivateRoute = ({ children }) => {
+  const isAuthenticated = !!localStorage.getItem('token');
+  return isAuthenticated ? children : <Navigate to="/auth" replace />;
+};
+
 function App() {
   return (
     <Router>
@@ -25,14 +31,16 @@ function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/auth" element={<Auth />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/voice" element={<VoiceAssistant />} />
-          <Route path="/gamification" element={<Gamification />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/invest" element={<Investment />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/founder" element={<Founder />} />
-          <Route path='/coming-soon' element={<MoneyMateComingSoon/>}/>
+
+          {/* Protected routes */}
+          <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+          <Route path="/voice" element={<PrivateRoute><VoiceAssistant /></PrivateRoute>} />
+          <Route path="/gamification" element={<PrivateRoute><Gamification /></PrivateRoute>} />
+          <Route path="/analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
+          <Route path="/invest" element={<PrivateRoute><Investment /></PrivateRoute>} />
+          <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+          <Route path="/founder" element={<PrivateRoute><Founder /></PrivateRoute>} />
+          <Route path='/coming-soon' element={<PrivateRoute><MoneyMateComingSoon/></PrivateRoute>} />
         </Routes>
         <Footer />
         <FloatingActionButton />
