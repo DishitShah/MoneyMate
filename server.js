@@ -216,9 +216,8 @@ app.get('/api/auth/google', passport.authenticate('google', { scope: ['profile',
 app.get('/api/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/' }),
   async (req, res) => {
-    // Issue JWT on successful Google login and redirect to frontend with token
     const token = jwt.sign({ id: req.user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
-    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard?token=${token}`);
+    res.redirect(`${process.env.FRONTEND_URL}/oauth?token=${token}`);
   }
 );
 
