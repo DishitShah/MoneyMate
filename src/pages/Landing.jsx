@@ -3,9 +3,14 @@ import { useNavigate } from 'react-router-dom';
 
 const Landing = () => {
   const navigate = useNavigate();
+  const token = localStorage.getItem('token');
 
   const handleStartJourney = () => {
-    navigate('/auth');
+    if (token) {
+      navigate('/dashboard');
+    } else {
+      navigate('/auth');
+    }
   };
 
   return (
@@ -19,7 +24,7 @@ const Landing = () => {
             Turn boring budgeting into an exciting game with voice commands, XP rewards, and personalized insights.
           </p>
           <button className="cta-button" onClick={handleStartJourney}>
-            🚀 Start Your Journey
+            {token ? '🏠 Go to Dashboard' : '🚀 Start Your Journey'}
           </button>
         </div>
       </div>

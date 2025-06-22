@@ -1,5 +1,6 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import PrivateRoute from './components/PrivateRoute';
 import Header from './components/Header';
 import Landing from './pages/Landing';
 import Dashboard from './pages/Dashboard';
@@ -16,12 +17,6 @@ import FloatingActionButton from './components/FloatingActionButton';
 import MoneyMateComingSoon from './components/MoneyMetComingSoon';
 import './styles/App.css';
 
-// --- Add PrivateRoute ---
-const PrivateRoute = ({ children }) => {
-  const isAuthenticated = !!localStorage.getItem('token');
-  return isAuthenticated ? children : <Navigate to="/auth" replace />;
-};
-
 function App() {
   return (
     <Router>
@@ -31,7 +26,6 @@ function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/auth" element={<Auth />} />
-
           {/* Protected routes */}
           <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/voice" element={<PrivateRoute><VoiceAssistant /></PrivateRoute>} />

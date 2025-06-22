@@ -433,35 +433,35 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 });
 
 // Get User Profile
-app.get('/api/auth/me', authMiddleware, async (req, res) => {
+// Update User Profile (name, avatar, etc.)
+app.patch('/api/auth/me', authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('-password');
+    const { name, avatar } = req.body;
+    const user = await User.findById(req.user._id);
+
+    if (name) user.name = name;
+    if (avatar) user.avatar = avatar;
+
+    await user.save();
 
     res.json({
       success: true,
+      message: 'Profile updated!',
       user: {
         id: user._id,
         name: user.name,
-        email: user.email,
         avatar: user.avatar,
+        email: user.email,
         xp: user.xp,
         level: user.level,
         streak: user.streak,
         badges: user.badges,
-        monthlyBudget: user.monthlyBudget,
-        currentBalance: user.currentBalance,
         totalSaved: user.totalSaved,
-        preferences: user.preferences,
         savingsGoals: user.savingsGoals,
-        transactions: user.transactions.slice(-10),
-      },
+      }
     });
   } catch (error) {
-    console.error('🔴 Get Profile Error:', error.message);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching profile',
-    });
+    res.status(500).json({ success: false, message: "Error updating profile" });
   }
 });
 

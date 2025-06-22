@@ -78,8 +78,10 @@ const Auth = () => {
       setIsLoading(false);
       if (res.data?.token) {
         localStorage.setItem('token', res.data.token);
+        console.log('Token set in localStorage:', res.data.token); // <-- Add this line
       }
       navigate('/dashboard');
+      console.log('Navigated to dashboard'); // <-- Add this line
     } catch (err) {
       setIsLoading(false);
       setError(
@@ -309,7 +311,7 @@ const Auth = () => {
                       padding: '12px 0'
                     }}
                   >
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="google" style={{ width: 24, height: 24, marginRight: 8 }} />
+                   
                     Sign in with Google
                   </button>
                 </div>
