@@ -3,9 +3,29 @@ import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
   const [budgetValue, setBudgetValue] = useState(2500);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Check for token in URL (Google Login) or localStorage
+    const params = new URLSearchParams(window.location.search);
+    const tokenFromURL = params.get('token');
+    if (tokenFromURL) {
+      localStorage.setItem('token', tokenFromURL);
+      // Clean the url
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate('/auth');
+    } else {
+      setLoading(false);
+    }
+  }, [navigate]);
+
+  useEffect(() => {
+    if (loading) return;
     const interval = setInterval(() => {
       if (Math.random() > 0.8) {
         setBudgetValue(prev => Math.max(0, prev - Math.floor(Math.random() * 50)));
@@ -13,7 +33,11 @@ const Dashboard = () => {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [loading]);
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className="page active">

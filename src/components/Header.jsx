@@ -19,12 +19,12 @@ const Header = () => {
         <div className="nav-container">
           <div className="logo-section">
             <Link to="/" className="logo">
-              💵 MoneyMate
+              MoneyMate
             </Link>
             <p className="tagline">Your Buddy That Saves With You</p>
           </div>
           <div className="bot-logo">
-            <img src="/path-to-your-bot-logo.png" alt="MoneyMate Bot" className="bot-icon" />
+            <img src="src\photos\black_circle_360x360.png" alt="MoneyMate Bot" className="bot-icon" />
           </div>
         </div>
       </header>
