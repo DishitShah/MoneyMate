@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 const Auth = () => {
   const [activeForm, setActiveForm] = useState('login');
   const [showPassword, setShowPassword] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [form, setForm] = useState({ email: '', password: '' });
   const navigate = useNavigate();
 
   const togglePassword = (inputId) => {
@@ -14,20 +16,38 @@ const Auth = () => {
     }));
   };
 
+  const handleInputChange = (e) => {
+    setForm({
+      ...form,
+      [e.target.name]: e.target.value
+    });
+  };
+
   const handleSubmit = async (e, formType) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const endpoint = formType === 'signup' ? '/api/auth/signup' : '/api/auth/login';
+      const res = await axios.post(endpoint, {
+        email: form.email,
+        password: form.password,
+      });
       setIsLoading(false);
+      // Save token or user info if returned
+      if (res.data?.token) {
+        localStorage.setItem('token', res.data.token);
+      }
       if (formType === 'signup') {
         alert('Account created successfully! Welcome to MoneyMate!');
       } else {
         alert('Welcome back! Redirecting to dashboard...');
       }
       navigate('/dashboard');
-    }, 2000);
+    } catch (err) {
+      setIsLoading(false);
+      alert(err.response?.data?.message || 'Authentication failed. Please try again.');
+    }
   };
 
   return (
@@ -82,133 +102,84 @@ const Auth = () => {
               
               <div className="form-group">
                 <label className="form-label">Email Address</label>
-                <input type="email" className="form-input" placeholder="Enter your email" required />
+                <input
+                  name="email"
+                  type="email"
+                  className="form-input"
+                  placeholder="Enter your email"
+                  value={form.email}
+                  onChange={handleInputChange}
+                  required
+                />
               </div>
               
               <div className="form-group">
                 <label className="form-label">Password</label>
                 <div style={{ position: 'relative' }}>
-                  <input 
-                    type={showPassword.loginPassword ? 'text' : 'password'} 
-                    className="form-input" 
-                    placeholder="Enter your password" 
-                    required 
+                  <input
+                    name="password"
+                    type={showPassword.loginPassword ? 'text' : 'password'}
+                    className="form-input"
+                    placeholder="Enter your password"
+                    value={form.password}
+                    onChange={handleInputChange}
+                    required
                   />
-                  <button 
-                    type="button" 
-                    className="password-toggle" 
+                  <button
+                    type="button"
+                    className="password-toggle"
                     onClick={() => togglePassword('loginPassword')}
                   >
-                    {showPassword.loginPassword ? '🙈' : '👁️'}
+                    {showPassword.loginPassword ? 'Hide' : 'Show'}
                   </button>
                 </div>
               </div>
-              
-              <div className="remember-forgot">
-                <div className="checkbox-group">
-                  <input type="checkbox" className="checkbox" id="remember" />
-                  <label htmlFor="remember">Remember me</label>
-                </div>
-                <a href="#" className="forgot-link">Forgot Password?</a>
-              </div>
-              
-              <button type="submit" className="submit-btn" disabled={isLoading}>
-                {isLoading ? '🔄 Logging in...' : '🚀 Login to Dashboard'}
+              <button className="submit-btn" type="submit" disabled={isLoading}>
+                {isLoading ? 'Logging in...' : 'Login'}
               </button>
-              
-              <div className="social-login">
-                <div className="social-title">Or continue with</div>
-                <div className="social-buttons">
-                  <button type="button" className="social-btn">🔍 Google</button>
-                  <button type="button" className="social-btn">📘 Facebook</button>
-                </div>
-              </div>
-              
-              <div className="switch-form">
-                Don't have an account? 
-                <span className="switch-link" onClick={() => setActiveForm('signup')}>
-                  Sign up here
-                </span>
-              </div>
             </form>
           ) : (
             <form className="auth-form active" onSubmit={(e) => handleSubmit(e, 'signup')}>
-              <h2 className="form-title">Join MoneyMate! 🎉</h2>
-              <p className="form-subtitle">Start your financial journey today</p>
-              
-              <div className="form-group">
-                <label className="form-label">Full Name</label>
-                <input type="text" className="form-input" placeholder="Enter your full name" required />
-              </div>
+              <h2 className="form-title">Create Account 🚀</h2>
+              <p className="form-subtitle">Start your savings journey today!</p>
               
               <div className="form-group">
                 <label className="form-label">Email Address</label>
-                <input type="email" className="form-input" placeholder="Enter your email" required />
+                <input
+                  name="email"
+                  type="email"
+                  className="form-input"
+                  placeholder="Enter your email"
+                  value={form.email}
+                  onChange={handleInputChange}
+                  required
+                />
               </div>
               
               <div className="form-group">
                 <label className="form-label">Password</label>
                 <div style={{ position: 'relative' }}>
-                  <input 
-                    type={showPassword.signupPassword ? 'text' : 'password'} 
-                    className="form-input" 
-                    placeholder="Create a strong password" 
-                    required 
+                  <input
+                    name="password"
+                    type={showPassword.signupPassword ? 'text' : 'password'}
+                    className="form-input"
+                    placeholder="Create a password"
+                    value={form.password}
+                    onChange={handleInputChange}
+                    required
                   />
-                  <button 
-                    type="button" 
-                    className="password-toggle" 
+                  <button
+                    type="button"
+                    className="password-toggle"
                     onClick={() => togglePassword('signupPassword')}
                   >
-                    {showPassword.signupPassword ? '🙈' : '👁️'}
+                    {showPassword.signupPassword ? 'Hide' : 'Show'}
                   </button>
                 </div>
               </div>
-              
-              <div className="form-group">
-                <label className="form-label">Confirm Password</label>
-                <div style={{ position: 'relative' }}>
-                  <input 
-                    type={showPassword.confirmPassword ? 'text' : 'password'} 
-                    className="form-input" 
-                    placeholder="Confirm your password" 
-                    required 
-                  />
-                  <button 
-                    type="button" 
-                    className="password-toggle" 
-                    onClick={() => togglePassword('confirmPassword')}
-                  >
-                    {showPassword.confirmPassword ? '🙈' : '👁️'}
-                  </button>
-                </div>
-              </div>
-              
-              <div className="remember-forgot">
-                <div className="checkbox-group">
-                  <input type="checkbox" className="checkbox" id="terms" required />
-                  <label htmlFor="terms">I agree to Terms & Privacy Policy</label>
-                </div>
-              </div>
-              
-              <button type="submit" className="submit-btn" disabled={isLoading}>
-                {isLoading ? '🔄 Creating account...' : '🎯 Create Account'}
+              <button className="submit-btn" type="submit" disabled={isLoading}>
+                {isLoading ? 'Creating...' : 'Sign Up'}
               </button>
-              
-              <div className="social-login">
-                <div className="social-title">Or sign up with</div>
-                <div className="social-buttons">
-                  <button type="button" className="social-btn">🔍 Google</button>
-                  <button type="button" className="social-btn">📘 Facebook</button>
-                </div>
-              </div>
-              
-              <div className="switch-form">
-                Already have an account? 
-                <span className="switch-link" onClick={() => setActiveForm('login')}>
-                  Login here
-                </span>
-              </div>
             </form>
           )}
         </div>
