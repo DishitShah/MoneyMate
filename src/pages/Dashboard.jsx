@@ -403,8 +403,47 @@ const Dashboard = () => {
     }
   };
 
+  // --- Utility function: Always fetch latest dashboard after any update!
+  const refreshDashboard = async () => {
+    const token = localStorage.getItem("token");
+    const res = await fetch("/api/dashboard", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const dash = await res.json();
+    if (dash && dash.dashboard) {
+      const d = dash.dashboard;
+      const mainGoal = d.goals && d.goals[0] ? d.goals[0] : null;
+      setUserData({
+        name: d.user.name || "",
+        level: d.user.level || 1,
+        xp: d.user.xp || 0,
+        streak: d.user.streak || 0,
+        budgetValue: d.budget.remaining || 0,
+        budgetUsed: d.budget.used || 0,
+        budgetPercentage: d.budget.usedPercentage || 0,
+        totalIncome: d.budget.income || 0,
+        totalExpense: d.budget.expense || 0,
+        savingsGoalCurrentSaved: mainGoal?.currentSaved || 0,
+        savingsGoalTarget: mainGoal?.targetAmount || 0,
+        savingGoal: mainGoal?.goalName || "",
+        goalAmount: mainGoal?.targetAmount || 0,
+        goalDate: mainGoal?.targetDate ? mainGoal.targetDate.slice(0, 10) : "",
+        alreadySaved: mainGoal?.currentSaved || 0,
+        goalProgress: mainGoal ? Math.round(mainGoal.progress) : 0,
+        goalCompleteBy: mainGoal?.targetDate
+          ? new Date(mainGoal.targetDate).toLocaleDateString()
+          : "",
+      });
+    }
+  };
+
   // --- Transactions ---
+  // Make sure amount is a number and show errors if backend returns one!
   const handleAddIncome = async ({ amount, note }) => {
+    if (!amount || isNaN(Number(amount))) {
+      alert("Please enter a valid income amount.");
+      return;
+    }
     const token = localStorage.getItem("token");
     const res = await fetch("/api/finance/income", {
       method: "POST",
@@ -412,16 +451,22 @@ const Dashboard = () => {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ amount, note }),
+      body: JSON.stringify({ amount: Number(amount), note }),
     });
     const data = await res.json();
     if (data.success) {
       await refreshDashboard();
+      setShowIncomeModal(false);
+    } else {
+      alert(data.message || "Error adding income");
     }
-    setShowIncomeModal(false);
   };
 
   const handleAddExpense = async ({ amount, note, category }) => {
+    if (!amount || isNaN(Number(amount))) {
+      alert("Please enter a valid expense amount.");
+      return;
+    }
     const token = localStorage.getItem("token");
     const res = await fetch("/api/finance/expense", {
       method: "POST",
@@ -429,13 +474,15 @@ const Dashboard = () => {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ amount, note, category }),
+      body: JSON.stringify({ amount: Number(amount), note, category }),
     });
     const data = await res.json();
     if (data.success) {
       await refreshDashboard();
+      setShowExpenseModal(false);
+    } else {
+      alert(data.message || "Error adding expense");
     }
-    setShowExpenseModal(false);
   };
 
   // --- Budget Meter Logic ---

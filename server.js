@@ -540,20 +540,15 @@ app.patch('/api/onboarding', authMiddleware, async (req, res) => {
   }
 });
 
-// --- FACTOR OUT DASHBOARD DATA LOGIC ---
+// --- Helper to get dashboard data (keep only one version) ---
 const getDashboardData = (user) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-
-  const todayExpenses = user.transactions
-    .filter((t) => t.type === 'expense' && new Date(t.date) >= today)
-    .reduce((sum, t) => sum + t.amount, 0);
 
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const monthExpenses = user.transactions
     .filter((t) => t.type === 'expense' && new Date(t.date) >= monthStart)
     .reduce((sum, t) => sum + t.amount, 0);
-
   const monthIncome = user.transactions
     .filter((t) => t.type === 'income' && new Date(t.date) >= monthStart)
     .reduce((sum, t) => sum + t.amount, 0);
@@ -562,8 +557,15 @@ const getDashboardData = (user) => {
     .filter((g) => !g.isCompleted)
     .map((goal) => ({
       ...goal.toObject(),
-      progress: goal.targetAmount ? Math.round((goal.currentSaved + monthIncome - monthExpenses) / goal.targetAmount * 100) : 0,
-      daysRemaining: Math.max(0, Math.ceil((new Date(goal.targetDate) - today) / (1000 * 60 * 60 * 24))),
+      progress: goal.targetAmount
+        ? Math.round(
+            ((goal.currentSaved + monthIncome - monthExpenses) / goal.targetAmount) * 100
+          )
+        : 0,
+      daysRemaining: Math.max(
+        0,
+        Math.ceil((new Date(goal.targetDate) - today) / (1000 * 60 * 60 * 24))
+      ),
     }));
 
   const recentTransactions = user.transactions
@@ -580,7 +582,7 @@ const getDashboardData = (user) => {
       xp: user.xp,
       streak: user.streak,
       avatar: user.avatar,
-      onboardingCompleted: user.onboardingCompleted
+      onboardingCompleted: user.onboardingCompleted,
     },
     budget: {
       monthly: user.monthlyBudget,
@@ -605,20 +607,20 @@ const getDashboardData = (user) => {
 app.post('/api/finance/income', authMiddleware, async (req, res) => {
   try {
     const { amount, note } = req.body;
-    if (!amount) return res.status(400).json({ success: false, message: 'Amount required' });
+    if (!amount || isNaN(Number(amount)))
+      return res.status(400).json({ success: false, message: 'Amount required' });
     const user = await User.findById(req.user._id);
 
     user.transactions.push({
-      amount: parseFloat(amount),
+      amount: Number(amount),
       type: 'income',
       category: 'Manual',
       description: note || '',
       date: new Date(),
     });
-    user.currentBalance += parseFloat(amount);
+    user.currentBalance += Number(amount);
 
     await user.save();
-    // Return latest dashboard data
     const dashboard = getDashboardData(user);
     res.json({ success: true, dashboard });
   } catch (e) {
@@ -630,20 +632,20 @@ app.post('/api/finance/income', authMiddleware, async (req, res) => {
 app.post('/api/finance/expense', authMiddleware, async (req, res) => {
   try {
     const { amount, note, category } = req.body;
-    if (!amount) return res.status(400).json({ success: false, message: 'Amount required' });
+    if (!amount || isNaN(Number(amount)))
+      return res.status(400).json({ success: false, message: 'Amount required' });
     const user = await User.findById(req.user._id);
 
     user.transactions.push({
-      amount: parseFloat(amount),
+      amount: Number(amount),
       type: 'expense',
       category: category || 'Manual',
       description: note || '',
       date: new Date(),
     });
-    user.currentBalance -= parseFloat(amount);
+    user.currentBalance -= Number(amount);
 
     await user.save();
-    // Return latest dashboard data
     const dashboard = getDashboardData(user);
     res.json({ success: true, dashboard });
   } catch (e) {
@@ -651,68 +653,7 @@ app.post('/api/finance/expense', authMiddleware, async (req, res) => {
   }
 });
 
-// ==== Helper to get dashboard data ====
-const getDashboardDataAlt = (user) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const todayExpenses = user.transactions
-    .filter((t) => t.type === 'expense' && new Date(t.date) >= today)
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  const monthExpenses = user.transactions
-    .filter((t) => t.type === 'expense' && new Date(t.date) >= monthStart)
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const monthIncome = user.transactions
-    .filter((t) => t.type === 'income' && new Date(t.date) >= monthStart)
-    .reduce((sum, t) => sum + t.amount, 0);
-
-  const activeGoals = user.savingsGoals
-    .filter((g) => !g.isCompleted)
-    .map((goal) => ({
-      ...goal.toObject(),
-      progress: goal.targetAmount ? Math.round((goal.currentSaved + monthIncome - monthExpenses) / goal.targetAmount * 100) : 0,
-      daysRemaining: Math.max(0, Math.ceil((new Date(goal.targetDate) - today) / (1000 * 60 * 60 * 24))),
-    }));
-
-  const recentTransactions = user.transactions
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .slice(0, 5);
-
-  const budgetRemaining = user.monthlyBudget - monthExpenses;
-  const budgetUsedPercentage = (monthExpenses / user.monthlyBudget) * 100;
-
-  return {
-    user: {
-      name: user.name,
-      level: user.level,
-      xp: user.xp,
-      streak: user.streak,
-      avatar: user.avatar,
-      onboardingCompleted: user.onboardingCompleted
-    },
-    budget: {
-      monthly: user.monthlyBudget,
-      used: monthExpenses,
-      remaining: budgetRemaining,
-      usedPercentage: Math.round(budgetUsedPercentage * 100) / 100,
-      income: monthIncome,
-      expense: monthExpenses,
-    },
-    goals: activeGoals,
-    recentTransactions,
-    quickStats: {
-      totalSaved: user.totalSaved,
-      currentBalance: user.currentBalance,
-      goalsCount: activeGoals.length,
-      badgesCount: user.badges.length,
-    },
-  };
-};
-
-// ==== GET /api/dashboard ====
+// --- Dashboard endpoint (no changes needed) ---
 app.get('/api/dashboard', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
