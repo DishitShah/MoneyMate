@@ -476,7 +476,7 @@ app.patch('/api/auth/me', authMiddleware, async (req, res) => {
   }
 });
 
-// --- ONBOARDING PATCH ENDPOINT (NEW) ---
+// --- ONBOARDING PATCH ENDPOINT (UPDATED) ---
 app.patch('/api/onboarding', authMiddleware, async (req, res) => {
   try {
     const {
@@ -489,7 +489,8 @@ app.patch('/api/onboarding', authMiddleware, async (req, res) => {
       goalAmount,
       goalDeadline,
       reminderFreq,
-      motivation
+      motivation,
+      alreadySaved // <-- Added
     } = req.body;
 
     const user = await User.findById(req.user._id);
@@ -517,9 +518,8 @@ app.patch('/api/onboarding', authMiddleware, async (req, res) => {
       user.monthlyBudget = incomeRanges[monthlyIncome] || 2500;
     }
 
-    // Optionally auto-create a savings goal if not already present
+    // Optionally auto-create or update a savings goal with alreadySaved
     if (savingGoal && goalAmount && goalDeadline) {
-      // Only add if not already present
       const already = user.savingsGoals.find(g =>
         g.goalName === savingGoal &&
         g.targetAmount == goalAmount &&
@@ -530,12 +530,15 @@ app.patch('/api/onboarding', authMiddleware, async (req, res) => {
           goalName: savingGoal,
           targetAmount: parseInt(goalAmount),
           targetDate: new Date(goalDeadline),
+          currentSaved: parseInt(alreadySaved) || 0, // <-- Added
           category: 'Other',
           priority: 'Medium',
-          currentSaved: 0,
           isCompleted: false,
           createdAt: new Date(),
         });
+      } else {
+        // update alreadySaved if goal exists
+        already.currentSaved = parseInt(alreadySaved) || 0;
       }
     }
 
@@ -555,272 +558,231 @@ app.patch('/api/onboarding', authMiddleware, async (req, res) => {
   }
 });
 
-// 🎯 Savings Goals Routes
+// --- FACTOR OUT DASHBOARD DATA LOGIC ---
+const getDashboardData = (user) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-// Create Savings Goal
-app.post('/api/goals', authMiddleware, async (req, res) => {
+  const todayExpenses = user.transactions
+    .filter((t) => t.type === 'expense' && new Date(t.date) >= today)
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const monthExpenses = user.transactions
+    .filter((t) => t.type === 'expense' && new Date(t.date) >= monthStart)
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const activeGoals = user.savingsGoals
+    .filter((g) => !g.isCompleted)
+    .map((goal) => ({
+      ...goal.toObject(),
+      progress: calculateProgress(goal.currentSaved, goal.targetAmount),
+      daysRemaining: getDaysRemaining(goal.targetDate),
+    }));
+
+  const recentTransactions = user.transactions
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 5);
+
+  const budgetRemaining = user.monthlyBudget - monthExpenses;
+  const budgetUsedPercentage = (monthExpenses / user.monthlyBudget) * 100;
+
+  return {
+    user: {
+      name: user.name,
+      level: user.level,
+      xp: user.xp,
+      streak: user.streak,
+      avatar: user.avatar,
+    },
+    budget: {
+      monthly: user.monthlyBudget,
+      used: monthExpenses,
+      remaining: budgetRemaining,
+      usedPercentage: Math.round(budgetUsedPercentage * 100) / 100,
+    },
+    today: {
+      expenses: todayExpenses,
+      canAfford: budgetRemaining > 0,
+    },
+    goals: activeGoals,
+    recentTransactions,
+    quickStats: {
+      totalSaved: user.totalSaved,
+      currentBalance: user.currentBalance,
+      goalsCount: activeGoals.length,
+      badgesCount: user.badges.length,
+    },
+  };
+};
+
+// --- NEW FINANCE ROUTES ---
+app.post('/api/finance/income', authMiddleware, async (req, res) => {
   try {
-    const { goalName, targetAmount, targetDate, category, priority } = req.body;
-
-    if (!goalName || !targetAmount || !targetDate) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide goal name, target amount, and target date',
-      });
-    }
-
+    const { amount, note } = req.body;
+    if (!amount) return res.status(400).json({ success: false, message: 'Amount required' });
     const user = await User.findById(req.user._id);
-
-    const newGoal = {
-      goalName,
-      targetAmount,
-      targetDate: new Date(targetDate),
-      category: category || 'Other',
-      priority: priority || 'Medium',
-      currentSaved: 0,
-      isCompleted: false,
-      createdAt: new Date(),
-    };
-
-    user.savingsGoals.push(newGoal);
+    user.transactions.push({
+      amount: parseFloat(amount),
+      type: 'income',
+      category: 'Manual',
+      description: note || '',
+      date: new Date(),
+    });
+    user.currentBalance += parseFloat(amount);
     await user.save();
+    const dashboard = getDashboardData(user);
+    return res.json({ success: true, dashboard });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
 
-    await addXP(user._id, 100, 'Created savings goal');
+app.post('/api/finance/expense', authMiddleware, async (req, res) => {
+  try {
+    const { amount, note, category } = req.body;
+    if (!amount) return res.status(400).json({ success: false, message: 'Amount required' });
+    const user = await User.findById(req.user._id);
+    user.transactions.push({
+      amount: parseFloat(amount),
+      type: 'expense',
+      category: category || 'Manual',
+      description: note || '',
+      date: new Date(),
+    });
+    user.currentBalance -= parseFloat(amount);
+    await user.save();
+    const dashboard = getDashboardData(user);
+    return res.json({ success: true, dashboard });
+  } catch (e) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
 
-    res.status(201).json({
+// Get All Transactions (Admin)
+app.get('/api/admin/transactions', authMiddleware, async (req, res) => {
+  try {
+    const users = await User.find({}).select('name email transactions -_id');
+    const allTransactions = users.flatMap((user) =>
+      user.transactions.map((t) => ({
+        userId: user._id,
+        userName: user.name,
+        userEmail: user.email,
+        ...t.toObject(),
+      }))
+    );
+
+    res.json({
       success: true,
-      message: 'Savings goal created successfully!',
-      goal: newGoal,
+      transactions: allTransactions,
     });
   } catch (error) {
-    console.error('🔴 Create Goal Error:', error.message);
+    console.error('🔴 Admin Transactions Error:', error.message);
     res.status(500).json({
       success: false,
-      message: 'Server error creating goal',
+      message: 'Server error fetching transactions',
     });
   }
 });
 
-// Get All Goals
-app.get('/api/goals', authMiddleware, async (req, res) => {
+// Get User Transactions (Admin)
+app.get('/api/admin/users/:userId/transactions', authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
+    const { userId } = req.params;
+    const user = await User.findById(userId).select('name email transactions -_id');
 
-    const goalsWithProgress = user.savingsGoals.map((goal) => ({
-      ...goal.toObject(),
-      progress: calculateProgress(goal.currentSaved, goal.targetAmount),
-      daysRemaining: getDaysRemaining(goal.targetDate),
-      dailySavingNeeded: Math.ceil(
-        (goal.targetAmount - goal.currentSaved) /
-          Math.max(getDaysRemaining(goal.targetDate), 1)
-      ),
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    const transactions = user.transactions.map((t) => ({
+      ...t.toObject(),
     }));
 
     res.json({
       success: true,
-      goals: goalsWithProgress,
-    });
-  } catch (error) {
-    console.error('🔴 Get Goals Error:', error.message);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching goals',
-    });
-  }
-});
-
-// Update Goal Progress
-app.patch('/api/goals/:goalId', authMiddleware, async (req, res) => {
-  try {
-    const { goalId } = req.params;
-    const { amount } = req.body;
-
-    if (!amount || amount <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide a valid amount',
-      });
-    }
-
-    const user = await User.findById(req.user._id);
-    const goal = user.savingsGoals.id(goalId);
-
-    if (!goal) {
-      return res.status(404).json({
-        success: false,
-        message: 'Goal not found',
-      });
-    }
-
-    goal.currentSaved += amount;
-    user.totalSaved += amount;
-
-    if (goal.currentSaved >= goal.targetAmount && !goal.isCompleted) {
-      goal.isCompleted = true;
-
-      user.badges.push({
-        name: `${goal.goalName} Completed`,
-        icon: '🎯',
-        earnedAt: new Date(),
-      });
-
-      await addXP(user._id, 500, 'Goal completed');
-    }
-
-    await user.save();
-
-    res.json({
-      success: true,
-      message: 'Goal updated successfully!',
-      goal: {
-        ...goal.toObject(),
-        progress: calculateProgress(goal.currentSaved, goal.targetAmount),
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
       },
+      transactions,
     });
   } catch (error) {
-    console.error('🔴 Update Goal Error:', error.message);
-    res.status(500).json({
-      success: false,
-      message: 'Server error updating goal',
-    });
-  }
-});
-
-// Delete Goal
-app.delete('/api/goals/:goalId', authMiddleware, async (req, res) => {
-  try {
-    const { goalId } = req.params;
-    const user = await User.findById(req.user._id);
-
-    const goal = user.savingsGoals.id(goalId);
-    if (!goal) {
-      return res.status(404).json({
-        success: false,
-        message: 'Goal not found',
-      });
-    }
-
-    user.savingsGoals.pull(goalId);
-    await user.save();
-
-    res.json({
-      success: true,
-      message: 'Goal deleted successfully!',
-    });
-  } catch (error) {
-    console.error('🔴 Delete Goal Error:', error.message);
-    res.status(500).json({
-      success: false,
-      message: 'Server error deleting goal',
-    });
-  }
-});
-
-// 💸 Transaction Routes
-
-// Add Transaction
-app.post('/api/transactions', authMiddleware, async (req, res) => {
-  try {
-    const { amount, type, category, description, date, tags } = req.body;
-
-    if (!amount || !type || !category) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide amount, type, and category',
-      });
-    }
-
-    if (!['income', 'expense'].includes(type)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Type must be either income or expense',
-      });
-    }
-
-    const user = await User.findById(req.user._id);
-
-    const newTransaction = {
-      amount: parseFloat(amount),
-      type,
-      category,
-      description: description || '',
-      date: date ? new Date(date) : new Date(),
-      tags: tags || [],
-    };
-
-    user.transactions.push(newTransaction);
-
-    if (type === 'income') {
-      user.currentBalance += parseFloat(amount);
-      await addXP(user._id, 25, 'Income added');
-    } else {
-      user.currentBalance -= parseFloat(amount);
-      await addXP(user._id, 10, 'Expense tracked');
-    }
-
-    await user.save();
-
-    res.status(201).json({
-      success: true,
-      message: 'Transaction added successfully!',
-      transaction: newTransaction,
-    });
-  } catch (error) {
-    console.error('🔴 Add Transaction Error:', error.message);
-    res.status(500).json({
-      success: false,
-      message: 'Server error adding transaction',
-    });
-  }
-});
-
-// Get Transactions
-app.get('/api/transactions', authMiddleware, async (req, res) => {
-  try {
-    let { page = 1, limit = 20, type, category, startDate, endDate } = req.query;
-    page = parseInt(page);
-    limit = parseInt(limit);
-
-    const user = await User.findById(req.user._id);
-    let transactions = [...user.transactions];
-
-    if (type) {
-      transactions = transactions.filter((t) => t.type === type);
-    }
-    if (category) {
-      transactions = transactions.filter((t) => t.category === category);
-    }
-    if (startDate || endDate) {
-      transactions = transactions.filter((t) => {
-        const transactionDate = new Date(t.date);
-        if (startDate && transactionDate < new Date(startDate)) return false;
-        if (endDate && transactionDate > new Date(endDate)) return false;
-        return true;
-      });
-    }
-
-    transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
-    const paginatedTransactions = transactions.slice(startIndex, endIndex);
-
-    res.json({
-      success: true,
-      transactions: paginatedTransactions,
-      pagination: {
-        currentPage: page,
-        totalPages: Math.ceil(transactions.length / limit),
-        totalTransactions: transactions.length,
-        hasNext: endIndex < transactions.length,
-        hasPrev: startIndex > 0,
-      },
-    });
-  } catch (error) {
-    console.error('🔴 Get Transactions Error:', error.message);
+    console.error('🔴 User Transactions Error:', error.message);
     res.status(500).json({
       success: false,
       message: 'Server error fetching transactions',
+    });
+  }
+});
+
+// Update Transaction (Admin)
+app.patch('/api/admin/transactions/:transactionId', authMiddleware, async (req, res) => {
+  try {
+    const { transactionId } = req.params;
+    const { amount, type, category, description, date, tags } = req.body;
+
+    const user = await User.findOne({ 'transactions._id': transactionId });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found',
+      });
+    }
+
+    const transaction = user.transactions.id(transactionId);
+    if (amount !== undefined) transaction.amount = amount;
+    if (type) transaction.type = type;
+    if (category) transaction.category = category;
+    if (description !== undefined) transaction.description = description;
+    if (date) transaction.date = new Date(date);
+    if (tags) transaction.tags = tags;
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Transaction updated successfully!',
+      transaction,
+    });
+  } catch (error) {
+    console.error('🔴 Update Transaction Error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Server error updating transaction',
+    });
+  }
+});
+
+// Delete Transaction (Admin)
+app.delete('/api/admin/transactions/:transactionId', authMiddleware, async (req, res) => {
+  try {
+    const { transactionId } = req.params;
+    const user = await User.findOne({ 'transactions._id': transactionId });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transaction not found',
+      });
+    }
+
+    user.transactions.pull(transactionId);
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Transaction deleted successfully!',
+    });
+  } catch (error) {
+    console.error('🔴 Delete Transaction Error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Server error deleting transaction',
     });
   }
 });
@@ -1185,62 +1147,11 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const todayExpenses = user.transactions
-      .filter((t) => t.type === 'expense' && new Date(t.date) >= today)
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-    const monthExpenses = user.transactions
-      .filter((t) => t.type === 'expense' && new Date(t.date) >= monthStart)
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    const activeGoals = user.savingsGoals
-      .filter((g) => !g.isCompleted)
-      .map((goal) => ({
-        ...goal.toObject(),
-        progress: calculateProgress(goal.currentSaved, goal.targetAmount),
-        daysRemaining: getDaysRemaining(goal.targetDate),
-      }));
-
-    const recentTransactions = user.transactions
-      .sort((a, b) => new Date(b.date) - new Date(a.date))
-      .slice(0, 5);
-
-    const budgetRemaining = user.monthlyBudget - monthExpenses;
-    const budgetUsedPercentage = (monthExpenses / user.monthlyBudget) * 100;
+    const dashboard = getDashboardData(user);
 
     res.json({
       success: true,
-      dashboard: {
-        user: {
-          name: user.name,
-          level: user.level,
-          xp: user.xp,
-          streak: user.streak,
-          avatar: user.avatar,
-        },
-        budget: {
-          monthly: user.monthlyBudget,
-          used: monthExpenses,
-          remaining: budgetRemaining,
-          usedPercentage: Math.round(budgetUsedPercentage * 100) / 100,
-        },
-        today: {
-          expenses: todayExpenses,
-          canAfford: budgetRemaining > 0,
-        },
-        goals: activeGoals,
-        recentTransactions,
-        quickStats: {
-          totalSaved: user.totalSaved,
-          currentBalance: user.currentBalance,
-          goalsCount: activeGoals.length,
-          badgesCount: user.badges.length,
-        },
-      },
+      dashboard,
     });
   } catch (error) {
     console.error('🔴 Dashboard Error:', error.message);

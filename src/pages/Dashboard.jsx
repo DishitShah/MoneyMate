@@ -1,4 +1,100 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
+
+// Transaction modals (GEN Z style)
+const TransactionModal = ({
+  show,
+  type,
+  onClose,
+  onSubmit,
+  categories,
+  defaultCategory,
+}) => {
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [category, setCategory] = useState(defaultCategory || "");
+
+  useEffect(() => {
+    setAmount("");
+    setNote("");
+    setCategory(defaultCategory || "");
+  }, [show, type, defaultCategory]);
+
+  if (!show) return null;
+  return (
+    <div className="modal-overlay">
+      <div className="onboarding-modal" style={{ maxWidth: 380 }}>
+        <button
+          onClick={onClose}
+          className="close-btn"
+          style={{ top: "0.7rem", right: "1rem", zIndex: 2, position: "absolute" }}
+        >
+          ✕
+        </button>
+        <h2 style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+          {type === "income" ? "➕ Add Income" : "➖ Add Expense"}
+        </h2>
+        <div className="form-group">
+          <label className="form-label">Amount (₹)</label>
+          <input
+            type="number"
+            className="form-input"
+            value={amount}
+            min={0}
+            onChange={e => setAmount(e.target.value)}
+            autoFocus
+          />
+        </div>
+        {type === "expense" && (
+          <div className="form-group">
+            <label className="form-label">Category</label>
+            <select
+              className="form-input"
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+            >
+              {categories.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div className="form-group">
+          <label className="form-label">Note (optional)</label>
+          <input
+            type="text"
+            className="form-input"
+            value={note}
+            onChange={e => setNote(e.target.value)}
+          />
+        </div>
+        <button
+          className="cta-button"
+          style={{ width: "100%" }}
+          onClick={() =>
+            onSubmit({
+              amount: parseFloat(amount),
+              note: note,
+              category: type === "expense" ? category : undefined,
+            })
+          }
+          disabled={!amount || (type === "expense" && !category)}
+        >
+          Add {type === "income" ? "Income" : "Expense"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const expenseCategories = [
+  "🍔 Food & Drinks",
+  "🚗 Travel / Fuel",
+  "🛍️ Shopping",
+  "🎮 Gaming / Subscriptions",
+  "💝 Gifting / Dating",
+  "📚 College / Books",
+  "Other",
+];
 
 const Dashboard = () => {
   const [loading, setLoading] = useState(true);
@@ -6,17 +102,20 @@ const Dashboard = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [profileCompleted, setProfileCompleted] = useState(false);
 
-  // Dashboard user data (for personalized dashboard)
+  const [showIncomeModal, setShowIncomeModal] = useState(false);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+
   const [userData, setUserData] = useState({
-    name: '',
-    ageGroup: '',
-    monthlyIncome: '',
+    name: "",
+    ageGroup: "",
+    monthlyIncome: "",
     spendingHabits: [],
-    trackingLevel: '',
-    savingGoal: '',
-    goalAmount: '',
-    goalDate: '',
-    reminderFreq: '',
+    trackingLevel: "",
+    savingGoal: "",
+    goalAmount: "",
+    goalDate: "",
+    alreadySaved: 0,
+    reminderFreq: "",
     motivation: [],
     level: 1,
     xp: 0,
@@ -26,22 +125,25 @@ const Dashboard = () => {
     budgetPercentage: 0,
     savingsGoalCurrentSaved: 0,
     savingsGoalTarget: 0,
+    totalIncome: 0,
+    totalExpense: 0,
     goalProgress: 0,
-    goalCompleteBy: '',
+    goalCompleteBy: "",
   });
 
   // Onboarding Form Data
   const [formData, setFormData] = useState({
-    name: '',
-    ageGroup: '18–24',
-    monthlyIncome: '',
+    name: "",
+    ageGroup: "18–24",
+    monthlyIncome: "",
     spendingHabits: [],
-    trackingLevel: '',
-    savingGoal: '',
-    goalAmount: '',
-    goalDate: '',
-    reminderFreq: '2–3 times a week',
-    motivation: []
+    trackingLevel: "",
+    savingGoal: "",
+    goalAmount: "",
+    goalDate: "",
+    alreadySaved: "",
+    reminderFreq: "2–3 times a week",
+    motivation: [],
   });
 
   // Simulate navigation - replace with useNavigate() in real app
@@ -50,111 +152,131 @@ const Dashboard = () => {
   // Fetch dashboard for completed users, fetch /api/auth/me to prefill form if onboarding incomplete
   useEffect(() => {
     const fetchData = async () => {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       if (!token) {
-        navigate('/auth');
+        navigate("/auth");
         return;
       }
       try {
         // Try dashboard data first
-        let dashboardRes = await fetch('/api/dashboard', {
-          headers: { 'Authorization': `Bearer ${token}` }
+        let dashboardRes = await fetch("/api/dashboard", {
+          headers: { Authorization: `Bearer ${token}` },
         });
         let dashboardData = await dashboardRes.json();
-        if (dashboardData && dashboardData.dashboard && dashboardData.dashboard.user) {
+        if (
+          dashboardData &&
+          dashboardData.dashboard &&
+          dashboardData.dashboard.user
+        ) {
           const d = dashboardData.dashboard;
           const mainGoal = d.goals && d.goals.length > 0 ? d.goals[0] : null;
-          // If onboarding completed
-          if (d.user && (d.user.onboardingCompleted || d.user.onboardingCompleted === undefined)) {
-            setProfileCompleted(Boolean(d.user.onboardingCompleted));
-            setUserData({
-              name: d.user.name || '',
-              level: d.user.level || 1,
-              xp: d.user.xp || 0,
-              streak: d.user.streak || 0,
-              budgetValue: d.budget.remaining || 0,
-              budgetUsed: d.budget.used || 0,
-              budgetPercentage: d.budget.usedPercentage || 0,
-              savingsGoalCurrentSaved: mainGoal?.currentSaved || 0,
-              savingsGoalTarget: mainGoal?.targetAmount || 0,
-              savingGoal: mainGoal?.goalName || '',
-              goalAmount: mainGoal?.targetAmount || 0,
-              goalDate: mainGoal?.targetDate ? mainGoal.targetDate.slice(0,10) : '',
-              goalProgress: mainGoal ? Math.round(mainGoal.progress) : 0,
-              goalCompleteBy: mainGoal?.targetDate
-                ? new Date(mainGoal.targetDate).toLocaleDateString()
-                : '',
+          setProfileCompleted(Boolean(d.user.onboardingCompleted));
+          setUserData({
+            name: d.user.name || "",
+            level: d.user.level || 1,
+            xp: d.user.xp || 0,
+            streak: d.user.streak || 0,
+            budgetValue: d.budget.remaining || 0,
+            budgetUsed: d.budget.used || 0,
+            budgetPercentage: d.budget.usedPercentage || 0,
+            totalIncome: d.budget.income || 0,
+            totalExpense: d.budget.expense || 0,
+            savingsGoalCurrentSaved: mainGoal?.currentSaved || 0,
+            savingsGoalTarget: mainGoal?.targetAmount || 0,
+            savingGoal: mainGoal?.goalName || "",
+            goalAmount: mainGoal?.targetAmount || 0,
+            goalDate: mainGoal?.targetDate
+              ? mainGoal.targetDate.slice(0, 10)
+              : "",
+            alreadySaved: mainGoal?.currentSaved || 0,
+            goalProgress: mainGoal ? Math.round(mainGoal.progress) : 0,
+            goalCompleteBy: mainGoal?.targetDate
+              ? new Date(mainGoal.targetDate).toLocaleDateString()
+              : "",
+          });
+          setLoading(false);
+          if (!d.user.onboardingCompleted) {
+            // Prefill onboarding form with profile
+            const res = await fetch("/api/auth/me", {
+              headers: { Authorization: `Bearer ${token}` },
             });
-            setLoading(false);
-            if (!d.user.onboardingCompleted) {
-              // Prefill onboarding form with profile
-              const res = await fetch('/api/auth/me', {
-                headers: { 'Authorization': `Bearer ${token}` }
+            const data = await res.json();
+            if (data && data.user) {
+              const u = data.user;
+              const profileGoal =
+                u.savingsGoals && u.savingsGoals.length > 0
+                  ? u.savingsGoals[0]
+                  : null;
+              setFormData({
+                name: u.name || "",
+                ageGroup: u.ageGroup || "18–24",
+                monthlyIncome: u.monthlyIncome || "",
+                spendingHabits: u.spendingHabits || [],
+                trackingLevel: u.trackingLevel || "",
+                savingGoal: profileGoal?.goalName || "",
+                goalAmount: profileGoal?.targetAmount || "",
+                goalDate: profileGoal?.targetDate
+                  ? profileGoal.targetDate.slice(0, 10)
+                  : "",
+                alreadySaved: profileGoal?.currentSaved || "",
+                reminderFreq: u.reminderFreq || "2–3 times a week",
+                motivation: u.motivation || [],
               });
-              const data = await res.json();
-              if (data && data.user) {
-                const u = data.user;
-                const profileGoal = u.savingsGoals && u.savingsGoals.length > 0 ? u.savingsGoals[0] : null;
-                setFormData({
-                  name: u.name || '',
-                  ageGroup: u.ageGroup || '18–24',
-                  monthlyIncome: u.monthlyIncome || '',
-                  spendingHabits: u.spendingHabits || [],
-                  trackingLevel: u.trackingLevel || '',
-                  savingGoal: profileGoal?.goalName || '',
-                  goalAmount: profileGoal?.targetAmount || '',
-                  goalDate: profileGoal?.targetDate ? profileGoal.targetDate.slice(0,10) : '',
-                  reminderFreq: u.reminderFreq || '2–3 times a week',
-                  motivation: u.motivation || [],
-                });
-              }
             }
-            return;
           }
+          return;
         }
         // Fallback: fetch profile (for onboarding/dummy)
-        const res = await fetch('/api/auth/me', {
-          headers: { 'Authorization': `Bearer ${token}` }
+        const res = await fetch("/api/auth/me", {
+          headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
         if (data && data.user) {
           const u = data.user;
           setProfileCompleted(Boolean(u.onboardingCompleted));
-          const mainGoal = u.savingsGoals && u.savingsGoals.length > 0 ? u.savingsGoals[0] : null;
+          const mainGoal =
+            u.savingsGoals && u.savingsGoals.length > 0
+              ? u.savingsGoals[0]
+              : null;
           setUserData({
-            name: u.name || '',
-            ageGroup: u.ageGroup || '',
-            monthlyIncome: u.monthlyIncome || '',
+            name: u.name || "",
+            ageGroup: u.ageGroup || "",
+            monthlyIncome: u.monthlyIncome || "",
             spendingHabits: u.spendingHabits || [],
-            trackingLevel: u.trackingLevel || '',
-            savingGoal: mainGoal?.goalName || '',
-            goalAmount: mainGoal?.targetAmount || '',
-            goalDate: mainGoal?.targetDate ? mainGoal.targetDate.slice(0,10) : '',
-            reminderFreq: u.reminderFreq || '',
+            trackingLevel: u.trackingLevel || "",
+            savingGoal: mainGoal?.goalName || "",
+            goalAmount: mainGoal?.targetAmount || "",
+            goalDate: mainGoal?.targetDate ? mainGoal.targetDate.slice(0, 10) : "",
+            alreadySaved: mainGoal?.currentSaved || 0,
+            reminderFreq: u.reminderFreq || "",
             motivation: u.motivation || [],
             level: u.level || 1,
             xp: u.xp || 0,
             streak: u.streak || 0,
+            budgetValue: u.monthlyBudget || 2500,
+            budgetUsed: 0,
+            totalIncome: 0,
+            totalExpense: 0,
             goalProgress: mainGoal
               ? Math.round((mainGoal.currentSaved / mainGoal.targetAmount) * 100)
               : 0,
             goalCompleteBy: mainGoal?.targetDate
               ? new Date(mainGoal.targetDate).toLocaleDateString()
-              : '',
-            budgetValue: u.monthlyBudget || 2500,
+              : "",
             savingsGoalCurrentSaved: mainGoal?.currentSaved || 0,
             savingsGoalTarget: mainGoal?.targetAmount || 0,
           });
           setFormData({
-            name: u.name || '',
-            ageGroup: u.ageGroup || '18–24',
-            monthlyIncome: u.monthlyIncome || '',
+            name: u.name || "",
+            ageGroup: u.ageGroup || "18–24",
+            monthlyIncome: u.monthlyIncome || "",
             spendingHabits: u.spendingHabits || [],
-            trackingLevel: u.trackingLevel || '',
-            savingGoal: mainGoal?.goalName || '',
-            goalAmount: mainGoal?.targetAmount || '',
-            goalDate: mainGoal?.targetDate ? mainGoal.targetDate.slice(0,10) : '',
-            reminderFreq: u.reminderFreq || '2–3 times a week',
+            trackingLevel: u.trackingLevel || "",
+            savingGoal: mainGoal?.goalName || "",
+            goalAmount: mainGoal?.targetAmount || "",
+            goalDate: mainGoal?.targetDate ? mainGoal.targetDate.slice(0, 10) : "",
+            alreadySaved: mainGoal?.currentSaved || "",
+            reminderFreq: u.reminderFreq || "2–3 times a week",
             motivation: u.motivation || [],
           });
         }
@@ -173,35 +295,40 @@ const Dashboard = () => {
 
   // --- Form Handlers ---
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }));
   };
   const handleMultiSelect = (field, value) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       [field]: prev[field].includes(value)
-        ? prev[field].filter(item => item !== value)
-        : [...prev[field], value]
+        ? prev[field].filter((item) => item !== value)
+        : [...prev[field], value],
     }));
   };
-  const nextStep = () => { if (currentStep < 5) setCurrentStep(currentStep + 1); };
-  const prevStep = () => { if (currentStep > 1) setCurrentStep(currentStep - 1); };
+  const nextStep = () => {
+    if (currentStep < 5) setCurrentStep(currentStep + 1);
+  };
+  const prevStep = () => {
+    if (currentStep > 1) setCurrentStep(currentStep - 1);
+  };
 
   const submitOnboarding = async () => {
     // Validation (compulsory)
     const required = [
-      ['name', 'Please enter your name!'],
-      ['ageGroup', 'Please select your age group!'],
-      ['monthlyIncome', 'Please select your monthly income!'],
-      ['spendingHabits', 'Please select at least one spending habit!'],
-      ['trackingLevel', 'Please select your expense tracking status!'],
-      ['savingGoal', 'Please enter a saving goal!'],
-      ['goalAmount', 'Please enter a goal amount!'],
-      ['goalDate', 'Please enter a goal date!'],
-      ['reminderFreq', 'Please choose a reminder frequency!'],
-      ['motivation', 'Please select at least one motivation!'],
+      ["name", "Please enter your name!"],
+      ["ageGroup", "Please select your age group!"],
+      ["monthlyIncome", "Please select your monthly income!"],
+      ["spendingHabits", "Please select at least one spending habit!"],
+      ["trackingLevel", "Please select your expense tracking status!"],
+      ["savingGoal", "Please enter a saving goal!"],
+      ["goalAmount", "Please enter a goal amount!"],
+      ["goalDate", "Please enter a goal date!"],
+      ["alreadySaved", "Please enter how much you've already saved!"],
+      ["reminderFreq", "Please choose a reminder frequency!"],
+      ["motivation", "Please select at least one motivation!"],
     ];
     for (let [field, msg] of required) {
       if (
@@ -214,7 +341,7 @@ const Dashboard = () => {
     }
     // API Call
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const payload = {
         name: formData.name,
         ageGroup: formData.ageGroup,
@@ -224,14 +351,15 @@ const Dashboard = () => {
         savingGoal: formData.savingGoal,
         goalAmount: formData.goalAmount,
         goalDeadline: formData.goalDate,
+        alreadySaved: formData.alreadySaved,
         reminderFreq: formData.reminderFreq,
         motivation: formData.motivation,
       };
-      const res = await fetch('/api/onboarding', {
-        method: 'PATCH',
+      const res = await fetch("/api/onboarding", {
+        method: "PATCH",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });
@@ -240,29 +368,32 @@ const Dashboard = () => {
         setProfileCompleted(true);
         setShowOnboarding(false);
         // Re-fetch dashboard data for personalized values
-        const dres = await fetch('/api/dashboard', {
-          headers: { 'Authorization': `Bearer ${token}` }
+        const dres = await fetch("/api/dashboard", {
+          headers: { Authorization: `Bearer ${token}` },
         });
         const dash = await dres.json();
         const d = dash.dashboard;
         const mainGoal = d.goals && d.goals.length > 0 ? d.goals[0] : null;
         setUserData({
-          name: d.user.name || '',
+          name: d.user.name || "",
           level: d.user.level || 1,
           xp: d.user.xp || 0,
           streak: d.user.streak || 0,
           budgetValue: d.budget.remaining || 0,
           budgetUsed: d.budget.used || 0,
           budgetPercentage: d.budget.usedPercentage || 0,
+          totalIncome: d.budget.income || 0,
+          totalExpense: d.budget.expense || 0,
           savingsGoalCurrentSaved: mainGoal?.currentSaved || 0,
           savingsGoalTarget: mainGoal?.targetAmount || 0,
-          savingGoal: mainGoal?.goalName || '',
+          savingGoal: mainGoal?.goalName || "",
           goalAmount: mainGoal?.targetAmount || 0,
-          goalDate: mainGoal?.targetDate ? mainGoal.targetDate.slice(0,10) : '',
+          goalDate: mainGoal?.targetDate ? mainGoal.targetDate.slice(0, 10) : "",
+          alreadySaved: mainGoal?.currentSaved || 0,
           goalProgress: mainGoal ? Math.round(mainGoal.progress) : 0,
           goalCompleteBy: mainGoal?.targetDate
             ? new Date(mainGoal.targetDate).toLocaleDateString()
-            : '',
+            : "",
         });
       } else {
         alert(data.message || "Failed to save onboarding!");
@@ -272,186 +403,77 @@ const Dashboard = () => {
     }
   };
 
-  // --- Onboarding Steps ---
-  const renderStep = () => {
-    switch (currentStep) {
-      case 1:
-        return (
-          <div className="form-step">
-            <h3>👤 Let's get to know you!</h3>
-            <div className="form-group">
-              <label className="form-label">What should we call you?</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Enter your first name"
-                value={formData.name}
-                onChange={(e) => handleInputChange('name', e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">What's your age group?</label>
-              <div className="option-grid">
-                {['Under 13', '13–17', '18–24', '25–30', '30+'].map(age => (
-                  <div
-                    key={age}
-                    className={`option-card ${formData.ageGroup === age ? 'selected' : ''}`}
-                    onClick={() => handleInputChange('ageGroup', age)}
-                  >
-                    {age}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-      case 2:
-        return (
-          <div className="form-step">
-            <h3>🪙 Money Talk Time!</h3>
-            <div className="form-group">
-              <label className="form-label">How much money do you usually get each month?</label>
-              <p className="form-tip">
-                From pocket money, salary, freelance, side hustles, etc.
-              </p>
-              <div className="option-grid">
-                {[
-                  '₹0 – ₹500', '₹500 – ₹1,000', '₹1,000 – ₹3,000', '₹3,000 – ₹5,000',
-                  '₹5,000 – ₹10,000', '₹10,000 – ₹25,000', '₹25,000 – ₹50,000', '₹50,000+'
-                ].map(income => (
-                  <div
-                    key={income}
-                    className={`option-card ${formData.monthlyIncome === income ? 'selected' : ''}`}
-                    onClick={() => handleInputChange('monthlyIncome', income)}
-                  >
-                    {income}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-      case 3:
-        return (
-          <div className="form-step">
-            <h3>💸 Spending Vibes Check</h3>
-            <div className="form-group">
-              <label className="form-label">What do you usually spend on the most?</label>
-              <p className="form-tip">
-                Pick all that apply! 👆
-              </p>
-              <div className="option-grid multi-select">
-                {[
-                  '🍔 Food & Drinks', '🚗 Travel / Fuel', '🛍️ Shopping', 
-                  '🎮 Gaming / Subscriptions', '💝 Gifting / Dating', '📚 College / Books'
-                ].map(habit => (
-                  <div
-                    key={habit}
-                    className={`option-card ${formData.spendingHabits.includes(habit) ? 'selected' : ''}`}
-                    onClick={() => handleMultiSelect('spendingHabits', habit)}
-                  >
-                    {habit}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Do you keep track of your expenses right now?</label>
-              <div className="option-grid">
-                {['Not at all', 'A little', 'Yes, I try!'].map(track => (
-                  <div
-                    key={track}
-                    className={`option-card ${formData.trackingLevel === track ? 'selected' : ''}`}
-                    onClick={() => handleInputChange('trackingLevel', track)}
-                  >
-                    {track}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-      case 4:
-        return (
-          <div className="form-step">
-            <h3>🎯 What's your saving goal?</h3>
-            <div className="form-group">
-              <label className="form-label">Are you saving for something cool right now?</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="PS5, iPhone 15, Trip to Goa, Emergency Fund..."
-                value={formData.savingGoal}
-                onChange={(e) => handleInputChange('savingGoal', e.target.value)}
-              />
-            </div>
-            <div className="form-row" style={{ display: 'flex', gap: '1rem' }}>
-              <div className="form-group" style={{ flex: 1 }}>
-                <label className="form-label">How much do you want to save for it?</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  placeholder="₹ Amount"
-                  value={formData.goalAmount}
-                  onChange={(e) => handleInputChange('goalAmount', e.target.value)}
-                />
-              </div>
-              <div className="form-group" style={{ flex: 1 }}>
-                <label className="form-label">By when do you want to achieve this?</label>
-                <input
-                  type="date"
-                  className="form-input"
-                  value={formData.goalDate}
-                  onChange={(e) => handleInputChange('goalDate', e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-        );
-      case 5:
-        return (
-          <div className="form-step">
-            <h3>⚡ Last bit - Your habits!</h3>
-            <div className="form-group">
-              <label className="form-label">How often do you want to be reminded to save or track your money?</label>
-              <div className="option-grid">
-                {['Every day', '2–3 times a week', 'Once a week', 'Only when I overspend 😅'].map(freq => (
-                  <div
-                    key={freq}
-                    className={`option-card ${formData.reminderFreq === freq ? 'selected' : ''}`}
-                    onClick={() => handleInputChange('reminderFreq', freq)}
-                  >
-                    {freq}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">What motivates you to save?</label>
-              <p className="form-tip">Pick all that apply! 🎯</p>
-              <div className="option-grid multi-select">
-                {[
-                  '🏆 Unlocking rewards', '🛒 Buying something big', '😌 Feeling secure', 
-                  '👥 Competing with friends', '🤖 Getting praise from AI'
-                ].map(motivation => (
-                  <div
-                    key={motivation}
-                    className={`option-card ${formData.motivation.includes(motivation) ? 'selected' : ''}`}
-                    onClick={() => handleMultiSelect('motivation', motivation)}
-                  >
-                    {motivation}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-      default:
-        return null;
+  // --- Transactions ---
+  const handleAddIncome = async ({ amount, note }) => {
+    const token = localStorage.getItem("token");
+    const res = await fetch("/api/finance/income", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ amount, note }),
+    });
+    const data = await res.json();
+    if (data.success && data.dashboard) {
+      setUserData((prev) => ({
+        ...prev,
+        ...{
+          ...data.dashboard.user,
+          ...data.dashboard.budget,
+          ...{
+            savingsGoalCurrentSaved:
+              data.dashboard.goals?.[0]?.currentSaved ||
+              prev.savingsGoalCurrentSaved,
+            savingsGoalTarget:
+              data.dashboard.goals?.[0]?.targetAmount ||
+              prev.savingsGoalTarget,
+            goalProgress:
+              data.dashboard.goals?.[0]?.progress ||
+              prev.goalProgress,
+          },
+        },
+      }));
     }
+    setShowIncomeModal(false);
+  };
+
+  const handleAddExpense = async ({ amount, note, category }) => {
+    const token = localStorage.getItem("token");
+    const res = await fetch("/api/finance/expense", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ amount, note, category }),
+    });
+    const data = await res.json();
+    if (data.success && data.dashboard) {
+      setUserData((prev) => ({
+        ...prev,
+        ...{
+          ...data.dashboard.user,
+          ...data.dashboard.budget,
+          ...{
+            savingsGoalCurrentSaved:
+              data.dashboard.goals?.[0]?.currentSaved ||
+              prev.savingsGoalCurrentSaved,
+            savingsGoalTarget:
+              data.dashboard.goals?.[0]?.targetAmount ||
+              prev.savingsGoalTarget,
+            goalProgress:
+              data.dashboard.goals?.[0]?.progress ||
+              prev.goalProgress,
+          },
+        },
+      }));
+    }
+    setShowExpenseModal(false);
   };
 
   // --- Budget Meter Logic ---
+  // Show nice default for dummy, otherwise use real numbers
   const meterBudgetValue = profileCompleted ? userData.budgetValue : 2500;
   const meterBudgetMax = profileCompleted
     ? userData.budgetValue + userData.budgetUsed
@@ -463,13 +485,19 @@ const Dashboard = () => {
   const meterGradient = `conic-gradient(#00ff88 0deg ${meterPercentage *
     3.6}deg, #ff6b6b ${meterPercentage * 3.6}deg 360deg)`;
 
-  // --- Savings Goal Logic ---
-  let goalName = profileCompleted && userData.savingGoal ? userData.savingGoal : 'PS5';
-  let goalCurrent = profileCompleted ? userData.savingsGoalCurrentSaved : 35000;
-  let goalTarget = profileCompleted ? userData.savingsGoalTarget : 50000;
-  let goalPercent = profileCompleted ? userData.goalProgress : 70;
-  let goalIcon =
-    profileCompleted && goalName.toLowerCase().includes('trip') ? '✈️' : '🎮';
+  // --- Savings Goal Logic (GEN Z Live) ---
+  const goalCurrent =
+    Number(userData.savingsGoalCurrentSaved || 0) +
+    Number(userData.totalIncome || 0) -
+    Number(userData.totalExpense || 0);
+  const goalTarget = Number(userData.savingsGoalTarget || 0);
+  const goalPercent = goalTarget
+    ? Math.round((goalCurrent / goalTarget) * 100)
+    : 0;
+  const goalName =
+    profileCompleted && userData.savingGoal ? userData.savingGoal : "PS5";
+  const goalIcon =
+    profileCompleted && goalName.toLowerCase().includes("trip") ? "✈️" : "🎮";
 
   if (loading) return <div>Loading...</div>;
 
@@ -491,41 +519,56 @@ const Dashboard = () => {
           </div>
         )}
 
-        <h1 style={{ textAlign: 'center', marginBottom: '2rem', fontSize: '2.5rem' }}>
+        {/* Transaction Buttons */}
+        <div className="add-transaction-bar" style={{ display: "flex", gap: 12, justifyContent: "center", marginBottom: 24 }}>
+          <button className="add-income-btn" onClick={() => setShowIncomeModal(true)}>
+            ➕ Add Income
+          </button>
+          <button className="add-expense-btn" onClick={() => setShowExpenseModal(true)}>
+            ➖ Add Expense
+          </button>
+        </div>
+
+        <h1 style={{ textAlign: "center", marginBottom: "2rem", fontSize: "2.5rem" }}>
           💰 Your Financial Dashboard
         </h1>
 
         <div className="dashboard-grid">
           {/* Budget Meter */}
           <div className="card">
-            <h3 style={{ textAlign: 'center', marginBottom: '1rem' }}>Budget Meter</h3>
+            <h3 style={{ textAlign: "center", marginBottom: "1rem" }}>Budget Meter</h3>
             <div className="budget-meter">
               <div className="meter-circle" style={{ background: meterGradient }}>
                 <div className="meter-inner">
-                  <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#00ff88' }}>
+                  <div style={{ fontSize: "2rem", fontWeight: "bold", color: "#00ff88" }}>
                     ₹{meterBudgetValue.toLocaleString()}
                   </div>
-                  <div style={{ opacity: 0.7, fontSize: '1rem' }}>
+                  <div style={{ opacity: 0.7, fontSize: "1rem" }}>
                     Remaining
                   </div>
                 </div>
               </div>
             </div>
-            <div style={{
-              textAlign: 'center',
-              fontSize: '1rem',
-              color: meterBudgetValue < meterBudgetMax * 0.2 ? '#ff6b6b' : '#00ff88',
-              marginTop: '0.7rem'
-            }}>
+            <div
+              style={{
+                textAlign: "center",
+                fontSize: "1rem",
+                color:
+                  meterBudgetValue < meterBudgetMax * 0.2
+                    ? "#ff6b6b"
+                    : "#00ff88",
+                marginTop: "0.7rem",
+              }}
+            >
               {meterBudgetValue < meterBudgetMax * 0.2
-                ? '⚠️ Low Budget Left!'
+                ? "⚠️ Low Budget Left!"
                 : `${100 - Math.round((meterBudgetValue / meterBudgetMax) * 100)}% used`}
             </div>
           </div>
 
           {/* AI Assistant */}
           <div className="card">
-            <h3 style={{ marginBottom: '1rem' }}>🤖 AI Assistant</h3>
+            <h3 style={{ marginBottom: "1rem" }}>🤖 AI Assistant</h3>
             <div className="voice-bubble">
               <p>
                 {profileCompleted
@@ -539,8 +582,8 @@ const Dashboard = () => {
             </div>
             <button
               className="cta-button"
-              style={{ width: '100%', margin: '0 auto', display: 'block' }}
-              onClick={() => navigate('/voice')}
+              style={{ width: "100%", margin: "0 auto", display: "block" }}
+              onClick={() => navigate("/voice")}
             >
               💬 Chat with AI
             </button>
@@ -548,11 +591,11 @@ const Dashboard = () => {
 
           {/* Progress */}
           <div className="card">
-            <h3 style={{ marginBottom: '1rem' }}>🎮 Your Progress</h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-              <span style={{ fontSize: '2rem' }}>⚡</span>
+            <h3 style={{ marginBottom: "1rem" }}>🎮 Your Progress</h3>
+            <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1rem" }}>
+              <span style={{ fontSize: "2rem" }}>⚡</span>
               <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
                   <span>Level {userData.level}</span>
                   <span>{userData.xp} XP</span>
                 </div>
@@ -563,8 +606,8 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>
                 🔥 {userData.streak} Day Streak!
               </div>
               <div style={{ opacity: 0.8 }}>Keep logging to maintain your streak</div>
@@ -574,12 +617,12 @@ const Dashboard = () => {
 
         {/* Savings Goal */}
         <div className="card">
-          <h3 style={{ marginBottom: '1rem' }}>
+          <h3 style={{ marginBottom: "1rem" }}>
             🎯 Savings Goal: {goalName}
           </h3>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#00ff88' }}>
+              <div style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#00ff88" }}>
                 ₹{goalCurrent.toLocaleString()} / ₹{goalTarget.toLocaleString()}
               </div>
               <div style={{ opacity: 0.8 }}>
@@ -587,11 +630,11 @@ const Dashboard = () => {
                 {userData.goalCompleteBy && ` - until ${userData.goalCompleteBy}`}
               </div>
             </div>
-            <div style={{ fontSize: '3rem' }}>
+            <div style={{ fontSize: "3rem" }}>
               {goalIcon}
             </div>
           </div>
-          <div className="xp-bar" style={{ marginTop: '1rem' }}>
+          <div className="xp-bar" style={{ marginTop: "1rem" }}>
             <div className="xp-progress" style={{ width: `${goalPercent}%` }}></div>
           </div>
         </div>
@@ -601,16 +644,14 @@ const Dashboard = () => {
       {showOnboarding && (
         <div className="modal-overlay">
           <div className="onboarding-modal">
-            {/* X Button above step indicator */}
             <button
               onClick={() => setShowOnboarding(false)}
               className="close-btn"
-              style={{ top: '0.7rem', right: '1rem', zIndex: 2, position: 'absolute'}}
+              style={{ top: "0.7rem", right: "1rem", zIndex: 2, position: "absolute" }}
             >
               ✕
             </button>
-            {/* Progress Bar/Step */}
-            <div className="modal-header" style={{ marginTop: '2.5rem' }}>
+            <div className="modal-header" style={{ marginTop: "2.5rem" }}>
               <h2>🚀 Quick Setup</h2>
               <span>{currentStep}/5</span>
             </div>
@@ -618,35 +659,251 @@ const Dashboard = () => {
               <div className="xp-progress" style={{ width: `${(currentStep / 5) * 100}%` }}></div>
             </div>
             {/* Form Step */}
-            {renderStep()}
-            {/* Navigation */}
+            {(() => {
+              switch (currentStep) {
+                case 1:
+                  return (
+                    <div className="form-step">
+                      <h3>👤 Let's get to know you!</h3>
+                      <div className="form-group">
+                        <label className="form-label">What should we call you?</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="Enter your first name"
+                          value={formData.name}
+                          onChange={(e) => handleInputChange("name", e.target.value)}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">What's your age group?</label>
+                        <div className="option-grid">
+                          {["Under 13", "13–17", "18–24", "25–30", "30+"].map((age) => (
+                            <div
+                              key={age}
+                              className={`option-card ${formData.ageGroup === age ? "selected" : ""}`}
+                              onClick={() => handleInputChange("ageGroup", age)}
+                            >
+                              {age}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                case 2:
+                  return (
+                    <div className="form-step">
+                      <h3>🪙 Money Talk Time!</h3>
+                      <div className="form-group">
+                        <label className="form-label">How much money do you usually get each month?</label>
+                        <p className="form-tip">
+                          From pocket money, salary, freelance, side hustles, etc.
+                        </p>
+                        <div className="option-grid">
+                          {[
+                            "₹0 – ₹500",
+                            "₹500 – ₹1,000",
+                            "₹1,000 – ₹3,000",
+                            "₹3,000 – ₹5,000",
+                            "₹5,000 – ₹10,000",
+                            "₹10,000 – ₹25,000",
+                            "₹25,000 – ₹50,000",
+                            "₹50,000+",
+                          ].map((income) => (
+                            <div
+                              key={income}
+                              className={`option-card ${formData.monthlyIncome === income ? "selected" : ""}`}
+                              onClick={() => handleInputChange("monthlyIncome", income)}
+                            >
+                              {income}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                case 3:
+                  return (
+                    <div className="form-step">
+                      <h3>💸 Spending Vibes Check</h3>
+                      <div className="form-group">
+                        <label className="form-label">What do you usually spend on the most?</label>
+                        <p className="form-tip">
+                          Pick all that apply! 👆
+                        </p>
+                        <div className="option-grid multi-select">
+                          {[
+                            "🍔 Food & Drinks",
+                            "🚗 Travel / Fuel",
+                            "🛍️ Shopping",
+                            "🎮 Gaming / Subscriptions",
+                            "💝 Gifting / Dating",
+                            "📚 College / Books",
+                          ].map((habit) => (
+                            <div
+                              key={habit}
+                              className={`option-card ${formData.spendingHabits.includes(habit) ? "selected" : ""}`}
+                              onClick={() => handleMultiSelect("spendingHabits", habit)}
+                            >
+                              {habit}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Do you keep track of your expenses right now?</label>
+                        <div className="option-grid">
+                          {["Not at all", "A little", "Yes, I try!"].map((track) => (
+                            <div
+                              key={track}
+                              className={`option-card ${formData.trackingLevel === track ? "selected" : ""}`}
+                              onClick={() => handleInputChange("trackingLevel", track)}
+                            >
+                              {track}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                case 4:
+                  return (
+                    <div className="form-step">
+                      <h3>🎯 What's your saving goal?</h3>
+                      <div className="form-group">
+                        <label className="form-label">Are you saving for something cool right now?</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="PS5, iPhone 15, Trip to Goa, Emergency Fund..."
+                          value={formData.savingGoal}
+                          onChange={(e) => handleInputChange("savingGoal", e.target.value)}
+                        />
+                      </div>
+                      <div className="form-row" style={{ display: "flex", gap: "1rem" }}>
+                        <div className="form-group" style={{ flex: 1 }}>
+                          <label className="form-label">How much do you want to save for it?</label>
+                          <input
+                            type="number"
+                            className="form-input"
+                            placeholder="₹ Amount"
+                            value={formData.goalAmount}
+                            onChange={(e) => handleInputChange("goalAmount", e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group" style={{ flex: 1 }}>
+                          <label className="form-label">By when do you want to achieve this?</label>
+                          <input
+                            type="date"
+                            className="form-input"
+                            value={formData.goalDate}
+                            onChange={(e) => handleInputChange("goalDate", e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">How much have you already saved towards this goal?</label>
+                        <input
+                          type="number"
+                          className="form-input"
+                          placeholder="₹ Amount"
+                          value={formData.alreadySaved}
+                          onChange={(e) => handleInputChange("alreadySaved", e.target.value)}
+                          min="0"
+                        />
+                      </div>
+                    </div>
+                  );
+                case 5:
+                  return (
+                    <div className="form-step">
+                      <h3>⚡ Last bit - Your habits!</h3>
+                      <div className="form-group">
+                        <label className="form-label">How often do you want to be reminded to save or track your money?</label>
+                        <div className="option-grid">
+                          {["Every day", "2–3 times a week", "Once a week", "Only when I overspend 😅"].map((freq) => (
+                            <div
+                              key={freq}
+                              className={`option-card ${formData.reminderFreq === freq ? "selected" : ""}`}
+                              onClick={() => handleInputChange("reminderFreq", freq)}
+                            >
+                              {freq}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">What motivates you to save?</label>
+                        <p className="form-tip">Pick all that apply! 🎯</p>
+                        <div className="option-grid multi-select">
+                          {[
+                            "🏆 Unlocking rewards",
+                            "🛒 Buying something big",
+                            "😌 Feeling secure",
+                            "👥 Competing with friends",
+                            "🤖 Getting praise from AI",
+                          ].map((motivation) => (
+                            <div
+                              key={motivation}
+                              className={`option-card ${formData.motivation.includes(motivation) ? "selected" : ""}`}
+                              onClick={() => handleMultiSelect("motivation", motivation)}
+                            >
+                              {motivation}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                default:
+                  return null;
+              }
+            })()}
             <div className="modal-nav">
               <button
                 onClick={prevStep}
                 disabled={currentStep === 1}
                 className="modal-btn"
                 style={{
-                  background: 'transparent',
-                  color: '#fff',
+                  background: "transparent",
+                  color: "#fff",
                   opacity: currentStep === 1 ? 0.5 : 1,
-                  cursor: currentStep === 1 ? 'not-allowed' : 'pointer'
+                  cursor: currentStep === 1 ? "not-allowed" : "pointer",
                 }}
-              >← Back</button>
+              >
+                ← Back
+              </button>
               {currentStep < 5 ? (
-                <button
-                  onClick={nextStep}
-                  className="cta-button"
-                >Next →</button>
+                <button onClick={nextStep} className="cta-button">
+                  Next →
+                </button>
               ) : (
-                <button
-                  onClick={submitOnboarding}
-                  className="cta-button"
-                >🎉 Finish Setup</button>
+                <button onClick={submitOnboarding} className="cta-button">
+                  🎉 Finish Setup
+                </button>
               )}
             </div>
           </div>
         </div>
       )}
+
+      {/* Add Income Modal */}
+      <TransactionModal
+        show={showIncomeModal}
+        type="income"
+        onClose={() => setShowIncomeModal(false)}
+        onSubmit={handleAddIncome}
+      />
+      {/* Add Expense Modal */}
+      <TransactionModal
+        show={showExpenseModal}
+        type="expense"
+        onClose={() => setShowExpenseModal(false)}
+        onSubmit={handleAddExpense}
+        categories={expenseCategories}
+        defaultCategory={expenseCategories[0]}
+      />
 
       {/* --- Styles --- */}
       <style jsx>{`
@@ -673,6 +930,23 @@ const Dashboard = () => {
           border: none;
           font-weight: 700;
           cursor: pointer;
+        }
+        .add-income-btn, .add-expense-btn {
+          font-size: 1.1rem;
+          font-weight: 600;
+          border-radius: 16px;
+          border: none;
+          padding: 0.7rem 1.7rem;
+          cursor: pointer;
+          background: linear-gradient(45deg, #00ff88, #00d4ff);
+          color: #000;
+          transition: box-shadow .2s;
+        }
+        .add-expense-btn {
+          background: linear-gradient(45deg, #ff6b6b, #ffd93d);
+        }
+        .add-income-btn:hover, .add-expense-btn:hover {
+          box-shadow: 0 2px 15px rgba(0,0,0,0.10);
         }
         .dashboard-grid {
           display: grid;
