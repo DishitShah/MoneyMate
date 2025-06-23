@@ -105,6 +105,9 @@ const Dashboard = () => {
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
 
+  // This state tracks what was the last action: "income" or "expense" (or null at start)
+  const [lastAction, setLastAction] = useState(null);
+
   const [userData, setUserData] = useState({
     name: "",
     ageGroup: "",
@@ -416,67 +419,70 @@ const Dashboard = () => {
   };
 
   // --- Transactions ---
-const handleAddIncome = async ({ amount, note }) => {
-  if (!amount || isNaN(Number(amount))) {
-    alert("Please enter a valid income amount.");
-    return;
-  }
-
-  try {
-    const token = localStorage.getItem("token");
-    const res = await fetch("/api/finance/income", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ amount: Number(amount), note }),
-    });
-    const data = await res.json();
-
-    if (data.success) {
-      // Update dashboard with returned data
-      if (data.dashboard) {
-        const d = data.dashboard;
-        const mainGoal = d.goals && d.goals[0] ? d.goals[0] : null;
-        setUserData({
-          name: d.user.name || "",
-          level: d.user.level || 1,
-          xp: d.user.xp || 0,
-          streak: d.user.streak || 0,
-          budgetValue: d.budget.remaining || 0,
-          budgetUsed: d.budget.used || 0,
-          budgetPercentage: d.budget.usedPercentage || 0,
-          totalIncome: d.budget.income || 0,
-          totalExpense: d.budget.expense || 0,
-          savingsGoalCurrentSaved: mainGoal?.currentSaved || 0,
-          savingsGoalTarget: mainGoal?.targetAmount || 0,
-          savingGoal: mainGoal?.goalName || "",
-          goalAmount: mainGoal?.targetAmount || 0,
-          goalDate: mainGoal?.targetDate ? mainGoal.targetDate.slice(0, 10) : "",
-          alreadySaved: mainGoal?.currentSaved || 0,
-          goalProgress: mainGoal ? Math.round(mainGoal.progress) : 0,
-          goalCompleteBy: mainGoal?.targetDate
-            ? new Date(mainGoal.targetDate).toLocaleDateString()
-            : "",
-        });
-      }
-      setShowIncomeModal(false);
-    } else {
-      alert(data.message || "Error adding income");
+  const handleAddIncome = async ({ amount, note }) => {
+    if (!amount || isNaN(Number(amount))) {
+      alert("Please enter a valid income amount.");
+      return;
     }
-  } catch (error) {
-    console.error('Error adding income:', error);
-    alert("Error adding income");
-  }
-};
+
+    try {
+      const token = localStorage.getItem("token");
+      console.log("Submitting income:", amount, note);
+      const res = await fetch("/api/finance/income", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ amount: Number(amount), note }),
+      });
+      const data = await res.json();
+      console.log("Income API response:", data);
+
+      if (data.success) {
+        if (data.dashboard) {
+          const d = data.dashboard;
+          const mainGoal = d.goals && d.goals[0] ? d.goals[0] : null;
+          const newUserData = {
+            name: d.user.name || "",
+            level: d.user.level || 1,
+            xp: d.user.xp || 0,
+            streak: d.user.streak || 0,
+            budgetValue: d.budget.remaining || 0,
+            budgetUsed: d.budget.used || 0,
+            budgetPercentage: d.budget.usedPercentage || 0,
+            totalIncome: d.budget.income || 0,
+            totalExpense: d.budget.expense || 0,
+            savingsGoalCurrentSaved: mainGoal?.currentSaved || 0,
+            savingsGoalTarget: mainGoal?.targetAmount || 0,
+            savingGoal: mainGoal?.goalName || "",
+            goalAmount: mainGoal?.targetAmount || 0,
+            goalDate: mainGoal?.targetDate ? mainGoal.targetDate.slice(0, 10) : "",
+            alreadySaved: mainGoal?.currentSaved || 0,
+            goalProgress: mainGoal ? Math.round(mainGoal.progress) : 0,
+            goalCompleteBy: mainGoal?.targetDate
+              ? new Date(mainGoal.targetDate).toLocaleDateString()
+              : "",
+          };
+          console.log("Setting user data after income:", newUserData);
+          setUserData(newUserData);
+          setLastAction("income"); // update last action here
+        }
+        setShowIncomeModal(false);
+      } else {
+        alert(data.message || "Error adding income");
+      }
+    } catch (error) {
+      console.error('Error adding income:', error);
+      alert("Error adding income");
+    }
+  };
 
   const handleAddExpense = async ({ amount, note, category }) => {
     if (!amount || isNaN(Number(amount))) {
       alert("Please enter a valid expense amount.");
       return;
     }
-    
     try {
       const token = localStorage.getItem("token");
       const res = await fetch("/api/finance/expense", {
@@ -488,9 +494,7 @@ const handleAddIncome = async ({ amount, note }) => {
         body: JSON.stringify({ amount: Number(amount), note, category }),
       });
       const data = await res.json();
-      
       if (data.success) {
-        // Update dashboard with returned data
         if (data.dashboard) {
           const d = data.dashboard;
           const mainGoal = d.goals && d.goals[0] ? d.goals[0] : null;
@@ -515,6 +519,7 @@ const handleAddIncome = async ({ amount, note }) => {
               ? new Date(mainGoal.targetDate).toLocaleDateString()
               : "",
           });
+          setLastAction("expense"); // update last action here
         }
         setShowExpenseModal(false);
       } else {
@@ -583,36 +588,35 @@ const handleAddIncome = async ({ amount, note }) => {
         <div className="dashboard-grid">
           {/* Budget Meter */}
           <div className="card">
-            <h3 style={{ textAlign: "center", marginBottom: "1rem" }}>Budget Meter</h3>
-            <div className="budget-meter">
-              <div className="meter-circle" style={{ background: meterGradient }}>
-                <div className="meter-inner">
-                  <div style={{ fontSize: "2rem", fontWeight: "bold", color: "#00ff88" }}>
-                    ₹{meterBudgetValue.toLocaleString()}
-                  </div>
-                  <div style={{ opacity: 0.7, fontSize: "1rem" }}>
-                    Remaining
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div
-              style={{
-                textAlign: "center",
-                fontSize: "1rem",
-                color:
-                  meterBudgetValue < meterBudgetMax * 0.2
-                    ? "#ff6b6b"
-                    : "#00ff88",
-                marginTop: "0.7rem",
-              }}
-            >
-              {meterBudgetValue < meterBudgetMax * 0.2
-                ? "⚠️ Low Budget Left!"
-                : `${100 - Math.round((meterBudgetValue / meterBudgetMax) * 100)}% used`}
-            </div>
-          </div>
-
+  <h3 style={{ textAlign: "center", marginBottom: "1rem" }}>Budget Meter</h3>
+  <div className="budget-meter">
+    <div className="meter-circle" style={{ background: meterGradient }}>
+      <div className="meter-inner">
+        <div style={{ fontSize: "2rem", fontWeight: "bold", color: "#00ff88" }}>
+          ₹{userData.budgetValue?.toLocaleString() ?? 0}
+        </div>
+        <div style={{ opacity: 0.7, fontSize: "1rem" }}>
+          Remaining
+        </div>
+      </div>
+    </div>
+  </div>
+  <div
+    style={{
+      textAlign: "center",
+      fontSize: "1rem",
+      color:
+        userData.budgetValue < (userData.totalIncome * 0.2)
+          ? "#ff6b6b"
+          : "#00ff88",
+      marginTop: "0.7rem",
+    }}
+  >
+    {userData.budgetValue < (userData.totalIncome * 0.2)
+      ? "⚠️ Low Budget Left!"
+      : `${100 - Math.round((userData.budgetValue / (userData.totalIncome || 1)) * 100)}% used`}
+  </div>
+</div>
           {/* AI Assistant */}
           <div className="card">
             <h3 style={{ marginBottom: "1rem" }}>🤖 AI Assistant</h3>

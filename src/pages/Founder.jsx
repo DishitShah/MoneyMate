@@ -11,9 +11,9 @@ const Founder = () => {
   return (
     <div className="page active">
       <div className="founder-hero">
-        <div className="founder-image">👨‍💻</div>
+        <div className="founder-image" >👨‍💻</div>
         <h1 style={{ marginBottom: '1rem', fontSize: '2.5rem' }}>Meet the Founder</h1>
-        <h2 style={{ marginBottom: '2rem', color: '#00d4ff' }}>Rahul Sharma</h2>
+        <h2 style={{ marginBottom: '2rem', color: '#00d4ff' }}>Dishit Shah</h2>
         <p style={{ 
           maxWidth: '600px', 
           margin: '0 auto 2rem', 
@@ -50,10 +50,13 @@ const Founder = () => {
         <div className="card">
           <h3 style={{ marginBottom: '1rem' }}>💡 The Journey</h3>
           <p style={{ opacity: 0.8, lineHeight: 1.6, marginBottom: '1rem' }}>
-            Started as a weekend project during my final year at IIT Delhi, MoneyMate was born from personal frustration. I was spending ₹300 daily on food without realizing it, and every budgeting app felt like a spreadsheet designed by accountants.
+MoneyMate wasn’t just an idea — it was a challenge. As a final-year student at Ahmedabad University, I came across the Bolt.new global hackathon and saw a unique opportunity: build something that actually helps my generation manage money better. That challenge lit the fuse. I knew I didn’t want to build another boring finance tracker — I wanted to build a buddy.
           </p>
-          <p style={{ opacity: 0.8, lineHeight: 1.6 }}>
-            Today, we're a team of passionate developers, designers, and financial experts working to revolutionize how Gen Z and Millennials think about money.
+          <p style={{ opacity: 0.8, lineHeight: 1.6, marginBottom: '1rem' }}>
+With a love for frontend design, gamification, and voice tech, I poured my energy into building something Gen Z would enjoy using. What started as a weekend experiment became MoneyMate — an app that understands your impulsive Swiggy orders, keeps track like a smart friend, and celebrates every ₹100 saved.
+          </p>
+          <p style={{ opacity: 0.8, lineHeight: 1.6, marginBottom: '1rem' }}>
+From sketching wireframes in Figma to deploying full-stack code in Bolt.new, I’ve worn every hat. MoneyMate came to life during the Bolt.new competition, and that one push from the community helped turn a raw idea into a working prototype. I’m incredibly grateful to Bolt.new for giving me that launchpad.
           </p>
         </div>
 
@@ -63,8 +66,10 @@ const Founder = () => {
             We're always looking for feedback, partnerships, and amazing people to join our mission. Whether you're a user, investor, or just someone who believes in making finance fun, let's connect!
           </p>
           <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-            <button className="cta-button">💌 Get in Touch</button>
-            <button className="cta-button">🚀 Join the Team</button>
+            
+      <button className="cta-button" onClick={() => window.open('https://www.linkedin.com/in/dishit-shah-224353283/', '_blank')}>💌 Get in Touch</button>
+    
+            
           </div>
         </div>
       </div>

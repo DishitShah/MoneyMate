@@ -202,7 +202,7 @@ passport.use(new GoogleStrategy(
           googleId: profile.id,
           name: profile.displayName,
           email: profile.emails?.[0]?.value || '',
-          avatar: profile.photos?.[0]?.value || '👤',
+          avatar:  '👤',
           password: await bcrypt.hash(Math.random().toString(36), 10),
         });
         await user.save();
@@ -557,8 +557,11 @@ const getDashboardData = (user) => {
     .reduce((sum, t) => sum + t.amount, 0);
 
   // Calculate budget remaining: monthly budget - expenses spent this month
-  const budgetRemaining = Math.max(0, user.monthlyBudget - monthExpenses);
-  const budgetUsedPercentage = user.monthlyBudget > 0 ? (monthExpenses / user.monthlyBudget) * 100 : 0;
+  const budgetRemainingRaw = user.monthlyBudget + monthIncome - monthExpenses;
+const budgetRemaining = Math.max(0, budgetRemainingRaw);
+  const budgetUsedPercentage = user.monthlyBudget > 0
+  ? Math.min(Math.max((monthExpenses / user.monthlyBudget) * 100, 0), 100)
+  : 0;
 
   // Calculate active goals with updated progress
   const activeGoals = user.savingsGoals
@@ -571,7 +574,9 @@ const getDashboardData = (user) => {
       return {
         ...goal.toObject(),
         currentSaved: totalSavedForGoal,
-        progress: goal.targetAmount > 0 ? Math.round((totalSavedForGoal / goal.targetAmount) * 100) : 0,
+        progress: goal.targetAmount > 0
+  ? Math.min(Math.max(Math.round((totalSavedForGoal / goal.targetAmount) * 100), 0), 100)
+  : 0,
         daysRemaining: Math.max(
           0,
           Math.ceil((new Date(goal.targetDate) - today) / (1000 * 60 * 60 * 24))

@@ -133,7 +133,8 @@ const Auth = () => {
           <div className="mascot">💵</div>
           <h1 className="welcome-text">Welcome to MoneyMate!</h1>
           <p className="welcome-subtitle">
-            Join thousands of users who've transformed their financial lives with our AI-powered budgeting companion.
+     Broke? We’ve all been there.
+Let MoneyMate turn your guilt trips into goal trips — with streaks, XP, and a voice that actually gives a damn.
           </p>
           <ul className="features-list">
             <li>
