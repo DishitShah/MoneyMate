@@ -14,9 +14,6 @@ import session from 'express-session';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 
-
-
-// 🔧 Configuration
 dotenv.config();
 const app = express();
 
@@ -70,7 +67,7 @@ const userSchema = new mongoose.Schema(
     },
     password: { type: String, required: true, minlength: 6 },
     avatar: { type: String, default: '👤' },
-    googleId: { type: String, default: '' }, // Google OAuth support
+    googleId: { type: String, default: '' },
     xp: { type: Number, default: 0 },
     level: { type: Number, default: 1 },
     streak: { type: Number, default: 0 },
@@ -131,6 +128,13 @@ const userSchema = new mongoose.Schema(
       voiceEnabled: { type: Boolean, default: true },
       theme: { type: String, enum: ['dark', 'light'], default: 'dark' },
     },
+    // --- Onboarding custom fields for GenZ UX ---
+    ageGroup: { type: String, default: '' },
+    spendingHabits: [{ type: String }],
+    trackingLevel: { type: String, default: '' },
+    reminderFreq: { type: String, default: '' },
+    motivation: [{ type: String }],
+    onboardingCompleted: { type: Boolean, default: false },
   },
   {
     timestamps: true,
@@ -186,8 +190,8 @@ passport.deserializeUser(async (id, done) => {
 
 passport.use(new GoogleStrategy(
   {
-    clientID: process.env.GOOGLE_CLIENT_ID, // Place your client ID in .env
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET, // Place your secret in .env
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackURL: '/api/auth/google/callback',
   },
   async (accessToken, refreshToken, profile, done) => {
@@ -199,7 +203,7 @@ passport.use(new GoogleStrategy(
           name: profile.displayName,
           email: profile.emails?.[0]?.value || '',
           avatar: profile.photos?.[0]?.value || '👤',
-          password: await bcrypt.hash(Math.random().toString(36), 10), // random password so schema is valid
+          password: await bcrypt.hash(Math.random().toString(36), 10),
         });
         await user.save();
       }
@@ -250,9 +254,6 @@ const addXP = async (userId, points, reason) => {
   }
 };
 
-
-
-
 // 🚀 API Routes
 
 // 🧪 Health Check
@@ -266,7 +267,6 @@ app.get('/api/ping', (req, res) => {
 });
 
 // 🔑 Authentication Routes
-
 
 // Register User
 app.post('/api/auth/signup', async (req, res) => {
@@ -407,7 +407,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-//forget password
+// Forget password
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -432,6 +432,18 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 });
 
 // Get User Profile
+app.get('/api/auth/me', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('-password');
+    res.json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error fetching profile" });
+  }
+});
+
 // Update User Profile (name, avatar, etc.)
 app.patch('/api/auth/me', authMiddleware, async (req, res) => {
   try {
@@ -461,6 +473,85 @@ app.patch('/api/auth/me', authMiddleware, async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: "Error updating profile" });
+  }
+});
+
+// --- ONBOARDING PATCH ENDPOINT (NEW) ---
+app.patch('/api/onboarding', authMiddleware, async (req, res) => {
+  try {
+    const {
+      name,
+      ageGroup,
+      monthlyIncome,
+      spendingHabits,
+      trackingLevel,
+      savingGoal,
+      goalAmount,
+      goalDeadline,
+      reminderFreq,
+      motivation
+    } = req.body;
+
+    const user = await User.findById(req.user._id);
+
+    if (name) user.name = name;
+    if (ageGroup) user.ageGroup = ageGroup;
+    if (spendingHabits) user.spendingHabits = spendingHabits;
+    if (trackingLevel) user.trackingLevel = trackingLevel;
+    if (reminderFreq) user.reminderFreq = reminderFreq;
+    if (motivation) user.motivation = motivation;
+    user.onboardingCompleted = true;
+
+    // Save/adjust budget based on monthlyIncome
+    if (monthlyIncome) {
+      const incomeRanges = {
+        '₹0 – ₹500': 400,
+        '₹500 – ₹1,000': 800,
+        '₹1,000 – ₹3,000': 2200,
+        '₹3,000 – ₹5,000': 3800,
+        '₹5,000 – ₹10,000': 7500,
+        '₹10,000 – ₹25,000': 18000,
+        '₹25,000 – ₹50,000': 35000,
+        '₹50,000+': 45000,
+      };
+      user.monthlyBudget = incomeRanges[monthlyIncome] || 2500;
+    }
+
+    // Optionally auto-create a savings goal if not already present
+    if (savingGoal && goalAmount && goalDeadline) {
+      // Only add if not already present
+      const already = user.savingsGoals.find(g =>
+        g.goalName === savingGoal &&
+        g.targetAmount == goalAmount &&
+        new Date(g.targetDate).toISOString().slice(0,10) === goalDeadline
+      );
+      if (!already) {
+        user.savingsGoals.push({
+          goalName: savingGoal,
+          targetAmount: parseInt(goalAmount),
+          targetDate: new Date(goalDeadline),
+          category: 'Other',
+          priority: 'Medium',
+          currentSaved: 0,
+          isCompleted: false,
+          createdAt: new Date(),
+        });
+      }
+    }
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Onboarding/profile setup completed!',
+      user,
+    });
+  } catch (error) {
+    console.error('🔴 Onboarding Error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Server error saving onboarding info',
+    });
   }
 });
 
@@ -835,11 +926,11 @@ User Profile:
 - Monthly Budget: ₹${user.monthlyBudget}
 - XP Level: ${user.level}
 - Active Goals: ${activeGoals
-      .map((g) => `${g.goalName} (₹${g.currentSaved}/₹${g.targetAmount})`)
-      .join(', ')}
+        .map((g) => `${g.goalName} (₹${g.currentSaved}/₹${g.targetAmount})`)
+        .join(', ')}
 - Recent Transactions: ${recentTransactions
-      .map((t) => `${t.type}: ₹${t.amount} for ${t.category}`)
-      .join(', ')}
+        .map((t) => `${t.type}: ₹${t.amount} for ${t.category}`)
+        .join(', ')}
 `;
 
     const prompt = `You are MoneyMate, a fun and friendly AI financial coach for Gen Z and millennials. 
@@ -950,7 +1041,6 @@ app.post('/api/voice', authMiddleware, async (req, res) => {
 
 // 📊 Analytics Routes
 
-// Get Analytics
 app.get('/api/analytics', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -1063,8 +1153,7 @@ app.get('/api/analytics', authMiddleware, async (req, res) => {
 // Update User Preferences
 app.patch('/api/preferences', authMiddleware, async (req, res) => {
   try {
-    const { monthlyBudget, currency, notifications, voiceEnabled, theme } =
-      req.body;
+    const { monthlyBudget, currency, notifications, voiceEnabled, theme } = req.body;
 
     const user = await User.findById(req.user._id);
 
@@ -1182,6 +1271,8 @@ app.use((req, res) => {
       'POST /api/auth/signup',
       'POST /api/auth/login',
       'GET /api/auth/me',
+      'PATCH /api/auth/me',
+      'PATCH /api/onboarding',
       'GET /api/dashboard',
       'POST /api/goals',
       'GET /api/goals',
@@ -1221,6 +1312,8 @@ const startServer = async () => {
    POST /api/auth/signup          - User registration
    POST /api/auth/login           - User login
    GET  /api/auth/me              - Get user profile
+   PATCH /api/auth/me             - Update user profile
+   PATCH /api/onboarding          - Save onboarding info
    GET  /api/dashboard            - Dashboard data
    POST /api/goals                - Create savings goal
    GET  /api/goals                - Get all goals
