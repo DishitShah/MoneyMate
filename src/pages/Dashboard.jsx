@@ -296,6 +296,8 @@ const Dashboard = () => {
     if (!loading && !profileCompleted) setShowOnboarding(true);
   }, [loading, profileCompleted]);
 
+  
+
   // --- Form Handlers ---
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({
@@ -477,6 +479,38 @@ const Dashboard = () => {
       alert("Error adding income");
     }
   };
+  const handleSetNewGoal = async (e) => {
+  e.preventDefault();
+  if (!newGoalName || !newGoalAmount) {
+    alert("Please enter new goal name and amount!");
+    return;
+  }
+  try {
+    const token = localStorage.getItem("token");
+    // You should update this API endpoint according to your backend
+    const res = await fetch("/api/savings/new-goal", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        goalName: newGoalName,
+        targetAmount: newGoalAmount,
+      }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      setNewGoalName("");
+      setNewGoalAmount("");
+      await refreshDashboard();
+    } else {
+      alert(data.message || "Failed to set new goal!");
+    }
+  } catch (err) {
+    alert("Error setting new goal: " + err.message);
+  }
+};
 
   const handleAddExpense = async ({ amount, note, category }) => {
     if (!amount || isNaN(Number(amount))) {
@@ -550,6 +584,13 @@ const Dashboard = () => {
   const goalPercent = goalTarget ? Math.round((goalCurrent / goalTarget) * 100) : 0;
   const goalName = profileCompleted && userData.savingGoal ? userData.savingGoal : "PS5";
   const goalIcon = profileCompleted && goalName.toLowerCase().includes("trip") ? "✈️" : "🎮";
+  const goalAchieved = goalTarget > 0 && goalCurrent >= goalTarget;
+
+
+  // States for the new goal input
+const [newGoalName, setNewGoalName] = useState("");
+const [newGoalAmount, setNewGoalAmount] = useState("");
+
 
   if (loading) return <div>Loading...</div>;
 
@@ -586,37 +627,75 @@ const Dashboard = () => {
         </h1>
 
         <div className="dashboard-grid">
-          {/* Budget Meter */}
-          <div className="card">
-  <h3 style={{ textAlign: "center", marginBottom: "1rem" }}>Budget Meter</h3>
-  <div className="budget-meter">
-    <div className="meter-circle" style={{ background: meterGradient }}>
-      <div className="meter-inner">
-        <div style={{ fontSize: "2rem", fontWeight: "bold", color: "#00ff88" }}>
-          ₹{userData.budgetValue?.toLocaleString() ?? 0}
-        </div>
-        <div style={{ opacity: 0.7, fontSize: "1rem" }}>
-          Remaining
+         {!goalAchieved ? (
+  <div className="card">
+    <h3 style={{ textAlign: "center", marginBottom: "1rem" }}>Budget Meter</h3>
+    <div className="budget-meter">
+      <div className="meter-circle" style={{ background: meterGradient }}>
+        <div className="meter-inner">
+          <div style={{ fontSize: "2rem", fontWeight: "bold", color: "#00ff88" }}>
+            ₹{userData.budgetValue?.toLocaleString() ?? 0}
+          </div>
+          <div style={{ opacity: 0.7, fontSize: "1rem" }}>
+            Remaining
+          </div>
         </div>
       </div>
     </div>
+    <div
+      style={{
+        textAlign: "center",
+        fontSize: "1rem",
+        color:
+          userData.budgetValue < (userData.totalIncome * 0.2)
+            ? "#ff6b6b"
+            : "#00ff88",
+        marginTop: "0.7rem",
+      }}
+    >
+      {userData.budgetValue < (userData.totalIncome * 0.2)
+        ? "⚠️ Low Budget Left!"
+        : `${100 - Math.round((userData.budgetValue / (userData.totalIncome || 1)) * 100)}% used`}
+    </div>
   </div>
-  <div
-    style={{
-      textAlign: "center",
-      fontSize: "1rem",
-      color:
-        userData.budgetValue < (userData.totalIncome * 0.2)
-          ? "#ff6b6b"
-          : "#00ff88",
-      marginTop: "0.7rem",
-    }}
-  >
-    {userData.budgetValue < (userData.totalIncome * 0.2)
-      ? "⚠️ Low Budget Left!"
-      : `${100 - Math.round((userData.budgetValue / (userData.totalIncome || 1)) * 100)}% used`}
+) : (
+  <div className="card" style={{ textAlign: "center", padding: "2rem" }}>
+    <h3 style={{ marginBottom: "1rem", color: "#00ff88" }}>
+      🎉 Congratulations! You've achieved your savings goal!
+    </h3>
+    <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>🏆</div>
+    <p style={{ marginBottom: "2rem" }}>
+      Ready to set a new goal? Enter your next savings target below!
+    </p>
+    <form
+      onSubmit={handleSetNewGoal}
+      style={{ maxWidth: 350, margin: "0 auto" }}
+    >
+      <input
+        type="text"
+        className="form-input"
+        placeholder="Enter new goal (e.g., MacBook, Trip, Emergency Fund)"
+        required
+        style={{ marginBottom: '1rem' }}
+        value={newGoalName}
+        onChange={e => setNewGoalName(e.target.value)}
+      />
+      <input
+        type="number"
+        className="form-input"
+        placeholder="Target Amount (₹)"
+        required
+        style={{ marginBottom: '1rem' }}
+        value={newGoalAmount}
+        onChange={e => setNewGoalAmount(e.target.value)}
+        min={1}
+      />
+      <button className="cta-button" type="submit">
+        Set New Goal
+      </button>
+    </form>
   </div>
-</div>
+)}
           {/* AI Assistant */}
           <div className="card">
             <h3 style={{ marginBottom: "1rem" }}>🤖 AI Assistant</h3>

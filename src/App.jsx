@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import PrivateRoute from './components/PrivateRoute';
 import Header from './components/Header';
 import Landing from './pages/Landing';
@@ -11,23 +11,33 @@ import Investment from './pages/Investment';
 import Profile from './pages/Profile';
 import Founder from './pages/Founder';
 import Auth from './pages/Auth';
-import OAuthHandler from './pages/OAuthHandler'; // <-- IMPORTANT: import OAuthHandler
+import OAuthHandler from './pages/OAuthHandler';
 import Footer from './components/Footer';
 import Particles from './components/Particles';
 import FloatingActionButton from './components/FloatingActionButton';
 import MoneyMateComingSoon from './components/MoneyMetComingSoon';
 import './styles/App.css';
 
+// --- GLOBAL SCROLL TO TOP COMPONENT ---
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  React.useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
 function App() {
   return (
     <Router>
+      <ScrollToTop />
       <div className="App">
         <Particles />
         <Header />
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/auth" element={<Auth />} />
-          <Route path="/oauth" element={<OAuthHandler />} /> {/* <-- Add this route */}
+          <Route path="/oauth" element={<OAuthHandler />} />
           {/* Protected routes */}
           <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/voice" element={<PrivateRoute><VoiceAssistant /></PrivateRoute>} />

@@ -698,6 +698,43 @@ app.post('/api/finance/expense', authMiddleware, async (req, res) => {
   }
 });
 
+// ==== Add a new Savings Goal ====
+app.post('/api/savings/new-goal', authMiddleware, async (req, res) => {
+  try {
+    const { goalName, targetAmount, targetDate, currentSaved } = req.body;
+    if (!goalName || !targetAmount) {
+      return res.status(400).json({ success: false, message: 'Goal name and target amount are required.' });
+    }
+
+    const user = await User.findById(req.user._id);
+
+    // Optionally, you can mark all previous goals as completed if only one can be active.
+    // user.savingsGoals.forEach(g => { g.isCompleted = true; });
+
+    user.savingsGoals.push({
+      goalName,
+      targetAmount: parseInt(targetAmount),
+      targetDate: targetDate ? new Date(targetDate) : new Date(Date.now() + 180 * 24 * 60 * 60 * 1000), // Default: 6 months from now
+      currentSaved: parseInt(currentSaved) || 0,
+      isCompleted: false,
+    });
+
+    await user.save();
+
+    // Optionally: return updated dashboard data
+    const dashboard = getDashboardData(user);
+
+    res.json({
+      success: true,
+      message: 'New savings goal added!',
+      dashboard,
+    });
+  } catch (error) {
+    console.error('🔴 Add New Goal Error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error adding new goal.' });
+  }
+});
+
 // --- Dashboard endpoint (FIXED) ---
 app.get('/api/dashboard', authMiddleware, async (req, res) => {
   try {
