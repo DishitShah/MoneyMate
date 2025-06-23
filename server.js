@@ -488,72 +488,54 @@ app.patch('/api/onboarding', authMiddleware, async (req, res) => {
       savingGoal,
       goalAmount,
       goalDeadline,
+      alreadySaved, // <-- add this!
       reminderFreq,
       motivation,
-      alreadySaved // <-- Added
     } = req.body;
 
     const user = await User.findById(req.user._id);
 
     if (name) user.name = name;
     if (ageGroup) user.ageGroup = ageGroup;
+    if (monthlyIncome) user.monthlyIncome = monthlyIncome;
     if (spendingHabits) user.spendingHabits = spendingHabits;
     if (trackingLevel) user.trackingLevel = trackingLevel;
     if (reminderFreq) user.reminderFreq = reminderFreq;
     if (motivation) user.motivation = motivation;
-    user.onboardingCompleted = true;
 
-    // Save/adjust budget based on monthlyIncome
-    if (monthlyIncome) {
-      const incomeRanges = {
-        '₹0 – ₹500': 400,
-        '₹500 – ₹1,000': 800,
-        '₹1,000 – ₹3,000': 2200,
-        '₹3,000 – ₹5,000': 3800,
-        '₹5,000 – ₹10,000': 7500,
-        '₹10,000 – ₹25,000': 18000,
-        '₹25,000 – ₹50,000': 35000,
-        '₹50,000+': 45000,
-      };
-      user.monthlyBudget = incomeRanges[monthlyIncome] || 2500;
-    }
-
-    // Optionally auto-create or update a savings goal with alreadySaved
+    // Savings Goal logic
     if (savingGoal && goalAmount && goalDeadline) {
-      const already = user.savingsGoals.find(g =>
-        g.goalName === savingGoal &&
-        g.targetAmount == goalAmount &&
-        new Date(g.targetDate).toISOString().slice(0,10) === goalDeadline
+      let mainGoal = user.savingsGoals.find(
+        g =>
+          g.goalName === savingGoal &&
+          g.targetAmount == goalAmount &&
+          new Date(g.targetDate).toISOString().slice(0, 10) === goalDeadline
       );
-      if (!already) {
+      if (!mainGoal) {
         user.savingsGoals.push({
           goalName: savingGoal,
           targetAmount: parseInt(goalAmount),
           targetDate: new Date(goalDeadline),
-          currentSaved: parseInt(alreadySaved) || 0, // <-- Added
-          category: 'Other',
-          priority: 'Medium',
-          isCompleted: false,
-          createdAt: new Date(),
+          currentSaved: parseInt(alreadySaved) || 0, // <-- This is key!
         });
       } else {
-        // update alreadySaved if goal exists
-        already.currentSaved = parseInt(alreadySaved) || 0;
+        mainGoal.currentSaved = parseInt(alreadySaved) || 0;
+        mainGoal.targetAmount = parseInt(goalAmount);
+        mainGoal.targetDate = new Date(goalDeadline);
       }
     }
 
+    user.onboardingCompleted = true;
     await user.save();
 
     res.json({
       success: true,
-      message: 'Onboarding/profile setup completed!',
       user,
     });
   } catch (error) {
-    console.error('🔴 Onboarding Error:', error.message);
     res.status(500).json({
       success: false,
-      message: 'Server error saving onboarding info',
+      message: 'Server error updating onboarding',
     });
   }
 });
@@ -572,12 +554,16 @@ const getDashboardData = (user) => {
     .filter((t) => t.type === 'expense' && new Date(t.date) >= monthStart)
     .reduce((sum, t) => sum + t.amount, 0);
 
+  const monthIncome = user.transactions
+    .filter((t) => t.type === 'income' && new Date(t.date) >= monthStart)
+    .reduce((sum, t) => sum + t.amount, 0);
+
   const activeGoals = user.savingsGoals
     .filter((g) => !g.isCompleted)
     .map((goal) => ({
       ...goal.toObject(),
-      progress: calculateProgress(goal.currentSaved, goal.targetAmount),
-      daysRemaining: getDaysRemaining(goal.targetDate),
+      progress: goal.targetAmount ? Math.round((goal.currentSaved + monthIncome - monthExpenses) / goal.targetAmount * 100) : 0,
+      daysRemaining: Math.max(0, Math.ceil((new Date(goal.targetDate) - today) / (1000 * 60 * 60 * 24))),
     }));
 
   const recentTransactions = user.transactions
@@ -594,16 +580,15 @@ const getDashboardData = (user) => {
       xp: user.xp,
       streak: user.streak,
       avatar: user.avatar,
+      onboardingCompleted: user.onboardingCompleted
     },
     budget: {
       monthly: user.monthlyBudget,
       used: monthExpenses,
       remaining: budgetRemaining,
       usedPercentage: Math.round(budgetUsedPercentage * 100) / 100,
-    },
-    today: {
-      expenses: todayExpenses,
-      canAfford: budgetRemaining > 0,
+      income: monthIncome,
+      expense: monthExpenses,
     },
     goals: activeGoals,
     recentTransactions,
@@ -616,12 +601,13 @@ const getDashboardData = (user) => {
   };
 };
 
-// --- NEW FINANCE ROUTES ---
+// ==== POST /api/finance/income ====
 app.post('/api/finance/income', authMiddleware, async (req, res) => {
   try {
     const { amount, note } = req.body;
     if (!amount) return res.status(400).json({ success: false, message: 'Amount required' });
     const user = await User.findById(req.user._id);
+
     user.transactions.push({
       amount: parseFloat(amount),
       type: 'income',
@@ -630,19 +616,23 @@ app.post('/api/finance/income', authMiddleware, async (req, res) => {
       date: new Date(),
     });
     user.currentBalance += parseFloat(amount);
+
     await user.save();
+    // Return latest dashboard data
     const dashboard = getDashboardData(user);
-    return res.json({ success: true, dashboard });
+    res.json({ success: true, dashboard });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
   }
 });
 
+// ==== POST /api/finance/expense ====
 app.post('/api/finance/expense', authMiddleware, async (req, res) => {
   try {
     const { amount, note, category } = req.body;
     if (!amount) return res.status(400).json({ success: false, message: 'Amount required' });
     const user = await User.findById(req.user._id);
+
     user.transactions.push({
       amount: parseFloat(amount),
       type: 'expense',
@@ -651,138 +641,121 @@ app.post('/api/finance/expense', authMiddleware, async (req, res) => {
       date: new Date(),
     });
     user.currentBalance -= parseFloat(amount);
+
     await user.save();
+    // Return latest dashboard data
     const dashboard = getDashboardData(user);
-    return res.json({ success: true, dashboard });
+    res.json({ success: true, dashboard });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
   }
 });
 
-// Get All Transactions (Admin)
-app.get('/api/admin/transactions', authMiddleware, async (req, res) => {
-  try {
-    const users = await User.find({}).select('name email transactions -_id');
-    const allTransactions = users.flatMap((user) =>
-      user.transactions.map((t) => ({
-        userId: user._id,
-        userName: user.name,
-        userEmail: user.email,
-        ...t.toObject(),
-      }))
-    );
+// ==== Helper to get dashboard data ====
+const getDashboardDataAlt = (user) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-    res.json({
-      success: true,
-      transactions: allTransactions,
-    });
-  } catch (error) {
-    console.error('🔴 Admin Transactions Error:', error.message);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching transactions',
-    });
-  }
-});
+  const todayExpenses = user.transactions
+    .filter((t) => t.type === 'expense' && new Date(t.date) >= today)
+    .reduce((sum, t) => sum + t.amount, 0);
 
-// Get User Transactions (Admin)
-app.get('/api/admin/users/:userId/transactions', authMiddleware, async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const user = await User.findById(userId).select('name email transactions -_id');
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const monthExpenses = user.transactions
+    .filter((t) => t.type === 'expense' && new Date(t.date) >= monthStart)
+    .reduce((sum, t) => sum + t.amount, 0);
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      });
-    }
+  const monthIncome = user.transactions
+    .filter((t) => t.type === 'income' && new Date(t.date) >= monthStart)
+    .reduce((sum, t) => sum + t.amount, 0);
 
-    const transactions = user.transactions.map((t) => ({
-      ...t.toObject(),
+  const activeGoals = user.savingsGoals
+    .filter((g) => !g.isCompleted)
+    .map((goal) => ({
+      ...goal.toObject(),
+      progress: goal.targetAmount ? Math.round((goal.currentSaved + monthIncome - monthExpenses) / goal.targetAmount * 100) : 0,
+      daysRemaining: Math.max(0, Math.ceil((new Date(goal.targetDate) - today) / (1000 * 60 * 60 * 24))),
     }));
 
+  const recentTransactions = user.transactions
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 5);
+
+  const budgetRemaining = user.monthlyBudget - monthExpenses;
+  const budgetUsedPercentage = (monthExpenses / user.monthlyBudget) * 100;
+
+  return {
+    user: {
+      name: user.name,
+      level: user.level,
+      xp: user.xp,
+      streak: user.streak,
+      avatar: user.avatar,
+      onboardingCompleted: user.onboardingCompleted
+    },
+    budget: {
+      monthly: user.monthlyBudget,
+      used: monthExpenses,
+      remaining: budgetRemaining,
+      usedPercentage: Math.round(budgetUsedPercentage * 100) / 100,
+      income: monthIncome,
+      expense: monthExpenses,
+    },
+    goals: activeGoals,
+    recentTransactions,
+    quickStats: {
+      totalSaved: user.totalSaved,
+      currentBalance: user.currentBalance,
+      goalsCount: activeGoals.length,
+      badgesCount: user.badges.length,
+    },
+  };
+};
+
+// ==== GET /api/dashboard ====
+app.get('/api/dashboard', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
     res.json({
       success: true,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-      },
-      transactions,
+      dashboard: getDashboardData(user),
     });
   } catch (error) {
-    console.error('🔴 User Transactions Error:', error.message);
     res.status(500).json({
       success: false,
-      message: 'Server error fetching transactions',
+      message: 'Server error fetching dashboard data',
     });
   }
 });
 
-// Update Transaction (Admin)
-app.patch('/api/admin/transactions/:transactionId', authMiddleware, async (req, res) => {
+// 🔧 Utility Routes
+
+// Update User Preferences
+app.patch('/api/preferences', authMiddleware, async (req, res) => {
   try {
-    const { transactionId } = req.params;
-    const { amount, type, category, description, date, tags } = req.body;
+    const { monthlyBudget, currency, notifications, voiceEnabled, theme } = req.body;
 
-    const user = await User.findOne({ 'transactions._id': transactionId });
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'Transaction not found',
-      });
-    }
+    const user = await User.findById(req.user._id);
 
-    const transaction = user.transactions.id(transactionId);
-    if (amount !== undefined) transaction.amount = amount;
-    if (type) transaction.type = type;
-    if (category) transaction.category = category;
-    if (description !== undefined) transaction.description = description;
-    if (date) transaction.date = new Date(date);
-    if (tags) transaction.tags = tags;
+    if (monthlyBudget) user.monthlyBudget = monthlyBudget;
+    if (currency) user.preferences.currency = currency;
+    if (notifications !== undefined)
+      user.preferences.notifications = notifications;
+    if (voiceEnabled !== undefined) user.preferences.voiceEnabled = voiceEnabled;
+    if (theme) user.preferences.theme = theme;
 
     await user.save();
 
     res.json({
       success: true,
-      message: 'Transaction updated successfully!',
-      transaction,
+      message: 'Preferences updated successfully!',
+      preferences: user.preferences,
     });
   } catch (error) {
-    console.error('🔴 Update Transaction Error:', error.message);
+    console.error('🔴 Update Preferences Error:', error.message);
     res.status(500).json({
       success: false,
-      message: 'Server error updating transaction',
-    });
-  }
-});
-
-// Delete Transaction (Admin)
-app.delete('/api/admin/transactions/:transactionId', authMiddleware, async (req, res) => {
-  try {
-    const { transactionId } = req.params;
-    const user = await User.findOne({ 'transactions._id': transactionId });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'Transaction not found',
-      });
-    }
-
-    user.transactions.pull(transactionId);
-    await user.save();
-
-    res.json({
-      success: true,
-      message: 'Transaction deleted successfully!',
-    });
-  } catch (error) {
-    console.error('🔴 Delete Transaction Error:', error.message);
-    res.status(500).json({
-      success: false,
-      message: 'Server error deleting transaction',
+      message: 'Server error updating preferences',
     });
   }
 });
@@ -1106,58 +1079,6 @@ app.get('/api/analytics', authMiddleware, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error fetching analytics',
-    });
-  }
-});
-
-// 🔧 Utility Routes
-
-// Update User Preferences
-app.patch('/api/preferences', authMiddleware, async (req, res) => {
-  try {
-    const { monthlyBudget, currency, notifications, voiceEnabled, theme } = req.body;
-
-    const user = await User.findById(req.user._id);
-
-    if (monthlyBudget) user.monthlyBudget = monthlyBudget;
-    if (currency) user.preferences.currency = currency;
-    if (notifications !== undefined)
-      user.preferences.notifications = notifications;
-    if (voiceEnabled !== undefined) user.preferences.voiceEnabled = voiceEnabled;
-    if (theme) user.preferences.theme = theme;
-
-    await user.save();
-
-    res.json({
-      success: true,
-      message: 'Preferences updated successfully!',
-      preferences: user.preferences,
-    });
-  } catch (error) {
-    console.error('🔴 Update Preferences Error:', error.message);
-    res.status(500).json({
-      success: false,
-      message: 'Server error updating preferences',
-    });
-  }
-});
-
-// Get Dashboard Data
-app.get('/api/dashboard', authMiddleware, async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id);
-
-    const dashboard = getDashboardData(user);
-
-    res.json({
-      success: true,
-      dashboard,
-    });
-  } catch (error) {
-    console.error('🔴 Dashboard Error:', error.message);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching dashboard data',
     });
   }
 });

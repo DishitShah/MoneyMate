@@ -415,25 +415,8 @@ const Dashboard = () => {
       body: JSON.stringify({ amount, note }),
     });
     const data = await res.json();
-    if (data.success && data.dashboard) {
-      setUserData((prev) => ({
-        ...prev,
-        ...{
-          ...data.dashboard.user,
-          ...data.dashboard.budget,
-          ...{
-            savingsGoalCurrentSaved:
-              data.dashboard.goals?.[0]?.currentSaved ||
-              prev.savingsGoalCurrentSaved,
-            savingsGoalTarget:
-              data.dashboard.goals?.[0]?.targetAmount ||
-              prev.savingsGoalTarget,
-            goalProgress:
-              data.dashboard.goals?.[0]?.progress ||
-              prev.goalProgress,
-          },
-        },
-      }));
+    if (data.success) {
+      await refreshDashboard();
     }
     setShowIncomeModal(false);
   };
@@ -449,25 +432,8 @@ const Dashboard = () => {
       body: JSON.stringify({ amount, note, category }),
     });
     const data = await res.json();
-    if (data.success && data.dashboard) {
-      setUserData((prev) => ({
-        ...prev,
-        ...{
-          ...data.dashboard.user,
-          ...data.dashboard.budget,
-          ...{
-            savingsGoalCurrentSaved:
-              data.dashboard.goals?.[0]?.currentSaved ||
-              prev.savingsGoalCurrentSaved,
-            savingsGoalTarget:
-              data.dashboard.goals?.[0]?.targetAmount ||
-              prev.savingsGoalTarget,
-            goalProgress:
-              data.dashboard.goals?.[0]?.progress ||
-              prev.goalProgress,
-          },
-        },
-      }));
+    if (data.success) {
+      await refreshDashboard();
     }
     setShowExpenseModal(false);
   };
