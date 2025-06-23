@@ -488,7 +488,7 @@ app.patch('/api/onboarding', authMiddleware, async (req, res) => {
       savingGoal,
       goalAmount,
       goalDeadline,
-      alreadySaved, // <-- add this!
+      alreadySaved,
       reminderFreq,
       motivation,
     } = req.body;
@@ -516,7 +516,7 @@ app.patch('/api/onboarding', authMiddleware, async (req, res) => {
           goalName: savingGoal,
           targetAmount: parseInt(goalAmount),
           targetDate: new Date(goalDeadline),
-          currentSaved: parseInt(alreadySaved) || 0, // <-- This is key!
+          currentSaved: parseInt(alreadySaved) || 0,
         });
       } else {
         mainGoal.currentSaved = parseInt(alreadySaved) || 0;
@@ -540,40 +540,48 @@ app.patch('/api/onboarding', authMiddleware, async (req, res) => {
   }
 });
 
-// --- Helper to get dashboard data (keep only one version) ---
+// --- Helper to get dashboard data (FIXED VERSION) ---
 const getDashboardData = (user) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  const monthExpenses = user.transactions
-    .filter((t) => t.type === 'expense' && new Date(t.date) >= monthStart)
-    .reduce((sum, t) => sum + t.amount, 0);
+  
+  // Calculate monthly income and expenses
   const monthIncome = user.transactions
     .filter((t) => t.type === 'income' && new Date(t.date) >= monthStart)
     .reduce((sum, t) => sum + t.amount, 0);
+    
+  const monthExpenses = user.transactions
+    .filter((t) => t.type === 'expense' && new Date(t.date) >= monthStart)
+    .reduce((sum, t) => sum + t.amount, 0);
 
+  // Calculate budget remaining: monthly budget - expenses spent this month
+  const budgetRemaining = Math.max(0, user.monthlyBudget - monthExpenses);
+  const budgetUsedPercentage = user.monthlyBudget > 0 ? (monthExpenses / user.monthlyBudget) * 100 : 0;
+
+  // Calculate active goals with updated progress
   const activeGoals = user.savingsGoals
     .filter((g) => !g.isCompleted)
-    .map((goal) => ({
-      ...goal.toObject(),
-      progress: goal.targetAmount
-        ? Math.round(
-            ((goal.currentSaved + monthIncome - monthExpenses) / goal.targetAmount) * 100
-          )
-        : 0,
-      daysRemaining: Math.max(
-        0,
-        Math.ceil((new Date(goal.targetDate) - today) / (1000 * 60 * 60 * 24))
-      ),
-    }));
+    .map((goal) => {
+      // Goal progress includes: initial saved + net income this month
+      const netIncomeThisMonth = monthIncome - monthExpenses;
+      const totalSavedForGoal = goal.currentSaved + Math.max(0, netIncomeThisMonth);
+      
+      return {
+        ...goal.toObject(),
+        currentSaved: totalSavedForGoal,
+        progress: goal.targetAmount > 0 ? Math.round((totalSavedForGoal / goal.targetAmount) * 100) : 0,
+        daysRemaining: Math.max(
+          0,
+          Math.ceil((new Date(goal.targetDate) - today) / (1000 * 60 * 60 * 24))
+        ),
+      };
+    });
 
   const recentTransactions = user.transactions
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 5);
-
-  const budgetRemaining = user.monthlyBudget - monthExpenses;
-  const budgetUsedPercentage = (monthExpenses / user.monthlyBudget) * 100;
 
   return {
     user: {
@@ -603,57 +611,89 @@ const getDashboardData = (user) => {
   };
 };
 
-// ==== POST /api/finance/income ====
+// ==== POST /api/finance/income (FIXED) ====
 app.post('/api/finance/income', authMiddleware, async (req, res) => {
   try {
     const { amount, note } = req.body;
-    if (!amount || isNaN(Number(amount)))
-      return res.status(400).json({ success: false, message: 'Amount required' });
+    if (!amount || isNaN(Number(amount))) {
+      return res.status(400).json({ success: false, message: 'Valid amount required' });
+    }
+
     const user = await User.findById(req.user._id);
 
+    // Add the new income transaction
     user.transactions.push({
       amount: Number(amount),
       type: 'income',
-      category: 'Manual',
+      category: 'Income',
       description: note || '',
       date: new Date(),
     });
+
+    // Update the current balance
     user.currentBalance += Number(amount);
 
+    // Add XP for income tracking
+    await addXP(user._id, 25, 'Income added');
+
     await user.save();
+
+    // Get fresh dashboard data
     const dashboard = getDashboardData(user);
-    res.json({ success: true, dashboard });
-  } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
+    
+    res.json({ 
+      success: true, 
+      message: 'Income added successfully!',
+      dashboard 
+    });
+  } catch (error) {
+    console.error('🔴 Add Income Error:', error.message);
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// ==== POST /api/finance/expense ====
+// ==== POST /api/finance/expense (FIXED) ====
 app.post('/api/finance/expense', authMiddleware, async (req, res) => {
   try {
     const { amount, note, category } = req.body;
-    if (!amount || isNaN(Number(amount)))
-      return res.status(400).json({ success: false, message: 'Amount required' });
+    if (!amount || isNaN(Number(amount))) {
+      return res.status(400).json({ success: false, message: 'Valid amount required' });
+    }
+
     const user = await User.findById(req.user._id);
 
+    // Add the new expense transaction
     user.transactions.push({
       amount: Number(amount),
       type: 'expense',
-      category: category || 'Manual',
+      category: category || 'Other',
       description: note || '',
       date: new Date(),
     });
+
+    // Update the current balance
     user.currentBalance -= Number(amount);
 
+    // Add XP for expense tracking
+    await addXP(user._id, 10, 'Expense tracked');
+
     await user.save();
+
+    // Get fresh dashboard data
     const dashboard = getDashboardData(user);
-    res.json({ success: true, dashboard });
-  } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
+    
+    res.json({ 
+      success: true, 
+      message: 'Expense added successfully!',
+      dashboard 
+    });
+  } catch (error) {
+    console.error('🔴 Add Expense Error:', error.message);
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// --- Dashboard endpoint (no changes needed) ---
+// --- Dashboard endpoint (FIXED) ---
 app.get('/api/dashboard', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -662,6 +702,7 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
       dashboard: getDashboardData(user),
     });
   } catch (error) {
+    console.error('🔴 Dashboard Error:', error.message);
     res.status(500).json({
       success: false,
       message: 'Server error fetching dashboard data',
@@ -1047,12 +1088,8 @@ app.use((req, res) => {
       'PATCH /api/auth/me',
       'PATCH /api/onboarding',
       'GET /api/dashboard',
-      'POST /api/goals',
-      'GET /api/goals',
-      'PATCH /api/goals/:goalId',
-      'DELETE /api/goals/:goalId',
-      'POST /api/transactions',
-      'GET /api/transactions',
+      'POST /api/finance/income',
+      'POST /api/finance/expense',
       'POST /api/xp',
       'POST /api/streak',
       'POST /api/ask-ai',
@@ -1088,12 +1125,8 @@ const startServer = async () => {
    PATCH /api/auth/me             - Update user profile
    PATCH /api/onboarding          - Save onboarding info
    GET  /api/dashboard            - Dashboard data
-   POST /api/goals                - Create savings goal
-   GET  /api/goals                - Get all goals
-   PATCH /api/goals/:goalId       - Update goal progress
-   DELETE /api/goals/:goalId      - Delete goal
-   POST /api/transactions         - Add transaction
-   GET  /api/transactions         - Get transactions
+   POST /api/finance/income       - Add income
+   POST /api/finance/expense      - Add expense
    POST /api/xp                   - Add XP points
    POST /api/streak               - Update daily streak
    POST /api/ask-ai               - AI assistant

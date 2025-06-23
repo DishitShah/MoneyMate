@@ -368,12 +368,26 @@ const Dashboard = () => {
         setProfileCompleted(true);
         setShowOnboarding(false);
         // Re-fetch dashboard data for personalized values
-        const dres = await fetch("/api/dashboard", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const dash = await dres.json();
+        await refreshDashboard();
+      } else {
+        alert(data.message || "Failed to save onboarding!");
+      }
+    } catch (e) {
+      alert("Error saving onboarding: " + e.message);
+    }
+  };
+
+  // --- Utility function: Always fetch latest dashboard after any update!
+  const refreshDashboard = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch("/api/dashboard", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const dash = await res.json();
+      if (dash && dash.dashboard) {
         const d = dash.dashboard;
-        const mainGoal = d.goals && d.goals.length > 0 ? d.goals[0] : null;
+        const mainGoal = d.goals && d.goals[0] ? d.goals[0] : null;
         setUserData({
           name: d.user.name || "",
           level: d.user.level || 1,
@@ -395,70 +409,65 @@ const Dashboard = () => {
             ? new Date(mainGoal.targetDate).toLocaleDateString()
             : "",
         });
-      } else {
-        alert(data.message || "Failed to save onboarding!");
       }
-    } catch (e) {
-      alert("Error saving onboarding: " + e.message);
-    }
-  };
-
-  // --- Utility function: Always fetch latest dashboard after any update!
-  const refreshDashboard = async () => {
-    const token = localStorage.getItem("token");
-    const res = await fetch("/api/dashboard", {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const dash = await res.json();
-    if (dash && dash.dashboard) {
-      const d = dash.dashboard;
-      const mainGoal = d.goals && d.goals[0] ? d.goals[0] : null;
-      setUserData({
-        name: d.user.name || "",
-        level: d.user.level || 1,
-        xp: d.user.xp || 0,
-        streak: d.user.streak || 0,
-        budgetValue: d.budget.remaining || 0,
-        budgetUsed: d.budget.used || 0,
-        budgetPercentage: d.budget.usedPercentage || 0,
-        totalIncome: d.budget.income || 0,
-        totalExpense: d.budget.expense || 0,
-        savingsGoalCurrentSaved: mainGoal?.currentSaved || 0,
-        savingsGoalTarget: mainGoal?.targetAmount || 0,
-        savingGoal: mainGoal?.goalName || "",
-        goalAmount: mainGoal?.targetAmount || 0,
-        goalDate: mainGoal?.targetDate ? mainGoal.targetDate.slice(0, 10) : "",
-        alreadySaved: mainGoal?.currentSaved || 0,
-        goalProgress: mainGoal ? Math.round(mainGoal.progress) : 0,
-        goalCompleteBy: mainGoal?.targetDate
-          ? new Date(mainGoal.targetDate).toLocaleDateString()
-          : "",
-      });
+    } catch (error) {
+      console.error('Error refreshing dashboard:', error);
     }
   };
 
   // --- Transactions ---
-  // Make sure amount is a number and show errors if backend returns one!
   const handleAddIncome = async ({ amount, note }) => {
     if (!amount || isNaN(Number(amount))) {
       alert("Please enter a valid income amount.");
       return;
     }
-    const token = localStorage.getItem("token");
-    const res = await fetch("/api/finance/income", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ amount: Number(amount), note }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      await refreshDashboard();
-      setShowIncomeModal(false);
-    } else {
-      alert(data.message || "Error adding income");
+    
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch("/api/finance/income", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ amount: Number(amount), note }),
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        // Update dashboard with returned data
+        if (data.dashboard) {
+          const d = data.dashboard;
+          const mainGoal = d.goals && d.goals[0] ? d.goals[0] : null;
+          setUserData({
+            name: d.user.name || "",
+            level: d.user.level || 1,
+            xp: d.user.xp || 0,
+            streak: d.user.streak || 0,
+            budgetValue: d.budget.remaining || 0,
+            budgetUsed: d.budget.used || 0,
+            budgetPercentage: d.budget.usedPercentage || 0,
+            totalIncome: d.budget.income || 0,
+            totalExpense: d.budget.expense || 0,
+            savingsGoalCurrentSaved: mainGoal?.currentSaved || 0,
+            savingsGoalTarget: mainGoal?.targetAmount || 0,
+            savingGoal: mainGoal?.goalName || "",
+            goalAmount: mainGoal?.targetAmount || 0,
+            goalDate: mainGoal?.targetDate ? mainGoal.targetDate.slice(0, 10) : "",
+            alreadySaved: mainGoal?.currentSaved || 0,
+            goalProgress: mainGoal ? Math.round(mainGoal.progress) : 0,
+            goalCompleteBy: mainGoal?.targetDate
+              ? new Date(mainGoal.targetDate).toLocaleDateString()
+              : "",
+          });
+        }
+        setShowIncomeModal(false);
+      } else {
+        alert(data.message || "Error adding income");
+      }
+    } catch (error) {
+      console.error('Error adding income:', error);
+      alert("Error adding income");
     }
   };
 
@@ -467,21 +476,53 @@ const Dashboard = () => {
       alert("Please enter a valid expense amount.");
       return;
     }
-    const token = localStorage.getItem("token");
-    const res = await fetch("/api/finance/expense", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ amount: Number(amount), note, category }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      await refreshDashboard();
-      setShowExpenseModal(false);
-    } else {
-      alert(data.message || "Error adding expense");
+    
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch("/api/finance/expense", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ amount: Number(amount), note, category }),
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        // Update dashboard with returned data
+        if (data.dashboard) {
+          const d = data.dashboard;
+          const mainGoal = d.goals && d.goals[0] ? d.goals[0] : null;
+          setUserData({
+            name: d.user.name || "",
+            level: d.user.level || 1,
+            xp: d.user.xp || 0,
+            streak: d.user.streak || 0,
+            budgetValue: d.budget.remaining || 0,
+            budgetUsed: d.budget.used || 0,
+            budgetPercentage: d.budget.usedPercentage || 0,
+            totalIncome: d.budget.income || 0,
+            totalExpense: d.budget.expense || 0,
+            savingsGoalCurrentSaved: mainGoal?.currentSaved || 0,
+            savingsGoalTarget: mainGoal?.targetAmount || 0,
+            savingGoal: mainGoal?.goalName || "",
+            goalAmount: mainGoal?.targetAmount || 0,
+            goalDate: mainGoal?.targetDate ? mainGoal.targetDate.slice(0, 10) : "",
+            alreadySaved: mainGoal?.currentSaved || 0,
+            goalProgress: mainGoal ? Math.round(mainGoal.progress) : 0,
+            goalCompleteBy: mainGoal?.targetDate
+              ? new Date(mainGoal.targetDate).toLocaleDateString()
+              : "",
+          });
+        }
+        setShowExpenseModal(false);
+      } else {
+        alert(data.message || "Error adding expense");
+      }
+    } catch (error) {
+      console.error('Error adding expense:', error);
+      alert("Error adding expense");
     }
   };
 
@@ -499,18 +540,11 @@ const Dashboard = () => {
     3.6}deg, #ff6b6b ${meterPercentage * 3.6}deg 360deg)`;
 
   // --- Savings Goal Logic (GEN Z Live) ---
-  const goalCurrent =
-    Number(userData.savingsGoalCurrentSaved || 0) +
-    Number(userData.totalIncome || 0) -
-    Number(userData.totalExpense || 0);
+  const goalCurrent = userData.savingsGoalCurrentSaved || 0;
   const goalTarget = Number(userData.savingsGoalTarget || 0);
-  const goalPercent = goalTarget
-    ? Math.round((goalCurrent / goalTarget) * 100)
-    : 0;
-  const goalName =
-    profileCompleted && userData.savingGoal ? userData.savingGoal : "PS5";
-  const goalIcon =
-    profileCompleted && goalName.toLowerCase().includes("trip") ? "✈️" : "🎮";
+  const goalPercent = goalTarget ? Math.round((goalCurrent / goalTarget) * 100) : 0;
+  const goalName = profileCompleted && userData.savingGoal ? userData.savingGoal : "PS5";
+  const goalIcon = profileCompleted && goalName.toLowerCase().includes("trip") ? "✈️" : "🎮";
 
   if (loading) return <div>Loading...</div>;
 
