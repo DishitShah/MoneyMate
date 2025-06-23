@@ -107,6 +107,8 @@ const Dashboard = () => {
 
   // This state tracks what was the last action: "income" or "expense" (or null at start)
   const [lastAction, setLastAction] = useState(null);
+  const [newGoalName, setNewGoalName] = useState("");
+const [newGoalAmount, setNewGoalAmount] = useState("");
 
   const [userData, setUserData] = useState({
     name: "",
@@ -533,6 +535,37 @@ const Dashboard = () => {
       alert("Error adding expense");
     }
   };
+  const handleSetNewGoal = async (e) => {
+  e.preventDefault();
+  if (!newGoalName || !newGoalAmount) {
+    alert("Please enter new goal name and amount!");
+    return;
+  }
+  try {
+    const token = localStorage.getItem("token");
+    const res = await fetch("/api/savings/new-goal", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        goalName: newGoalName,
+        targetAmount: newGoalAmount,
+      }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      setNewGoalName("");
+      setNewGoalAmount("");
+      await refreshDashboard();
+    } else {
+      alert(data.message || "Failed to set new goal!");
+    }
+  } catch (err) {
+    alert("Error setting new goal: " + err.message);
+  }
+};
 
   // --- Budget Meter Logic ---
   // Show nice default for dummy, otherwise use real numbers
@@ -553,12 +586,7 @@ const Dashboard = () => {
   const goalPercent = goalTarget ? Math.round((goalCurrent / goalTarget) * 100) : 0;
   const goalName = profileCompleted && userData.savingGoal ? userData.savingGoal : "PS5";
   const goalIcon = profileCompleted && goalName.toLowerCase().includes("trip") ? "✈️" : "🎮";
-  const goalAchieved = goalTarget > 0 && goalCurrent >= goalTarget;
-
-
-  // States for the new goal input
-const [newGoalName, setNewGoalName] = useState("");
-const [newGoalAmount, setNewGoalAmount] = useState("");
+const goalAchieved = goalTarget > 0 && goalCurrent >= goalTarget;
 
 
   if (loading) return <div>Loading...</div>;
