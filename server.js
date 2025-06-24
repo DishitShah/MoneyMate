@@ -79,8 +79,9 @@ const userSchema = new mongoose.Schema(
         earnedAt: { type: Date, default: Date.now },
       },
     ],
-    monthlyBudget: { type: Number, default: 10000 },
+    
     currentBalance: { type: Number, default: 0 },
+    monthlyBudget: { type: Number, default: 0 },
     totalSaved: { type: Number, default: 0 },
     savingsGoals: [
       {
@@ -140,6 +141,12 @@ const userSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+userSchema.pre('save', function(next) {
+  if (this.isNew && (this.monthlyBudget === undefined || this.monthlyBudget === null)) {
+    this.monthlyBudget = this.currentBalance;
+  }
+  next();
+});
 
 // 🔐 User Model
 const User = mongoose.model('User', userSchema);
@@ -547,15 +554,36 @@ const getDashboardData = async (user) => {
   today.setHours(0, 0, 0, 0);
 
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  
+
   // Calculate monthly income and expenses
   const monthIncome = user.transactions
     .filter((t) => t.type === 'income' && new Date(t.date) >= monthStart)
     .reduce((sum, t) => sum + t.amount, 0);
-    
+
   const monthExpenses = user.transactions
     .filter((t) => t.type === 'expense' && new Date(t.date) >= monthStart)
     .reduce((sum, t) => sum + t.amount, 0);
+
+  // === ADD THIS BLOCK FOR SPENDING POWER METER ===
+  // --- Spending Power Meter ---
+// Helper to extract the lower number from a range string like "₹5,000 – ₹10,000"
+function parseMonthlyIncomeRange(incomeStr) {
+  if (typeof incomeStr !== "string") return 0;
+  const match = incomeStr.replace(/,/g, '').match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : 0;
+}
+const lowerMonthlyIncome = parseMonthlyIncomeRange(user.monthlyIncome);
+const baseIncome = lowerMonthlyIncome;
+
+const totalAlreadySaved = Array.isArray(user.savingsGoals)
+  ? user.savingsGoals.reduce((sum, g) => sum + (g.currentSaved || 0), 0)
+  : 0;
+
+const meterMax = baseIncome + totalAlreadySaved;
+const meterCurrent = user.currentBalance;
+const meterUsed = Math.max(0, meterMax - meterCurrent);
+const meterPercentage = meterMax > 0 ? (meterCurrent / meterMax) * 100 : 0;
+  // ================================================
 
   // Calculate budget remaining: monthly budget - expenses spent this month
   const budgetRemainingRaw = user.monthlyBudget + monthIncome - monthExpenses;
@@ -604,6 +632,8 @@ const getDashboardData = async (user) => {
       streak: user.streak,
       avatar: user.avatar,
       onboardingCompleted: user.onboardingCompleted,
+      monthlyIncome: user.monthlyIncome, // <-- Add this for frontend use
+      monthlyBudget: user.monthlyBudget, // <-- Add this for frontend use, if needed
     },
     budget: {
       monthly: user.monthlyBudget,
@@ -621,6 +651,16 @@ const getDashboardData = async (user) => {
       goalsCount: activeGoals.length,
       badgesCount: user.badges.length,
     },
+    // === RETURN THE SPENDING POWER METER OBJECT ===
+    spendingPower: {
+  max: Math.round(meterMax),
+  current: Math.round(meterCurrent),
+  used: Math.round(meterUsed),
+  percentage: Math.round(meterPercentage),
+  baseIncome: Math.round(baseIncome),
+  alreadySaved: Math.round(totalAlreadySaved),
+},
+    // ===============================================
   };
 };
 // ==== POST /api/finance/income (FIXED) ====
@@ -702,7 +742,7 @@ app.post('/api/finance/expense', authMiddleware, async (req, res) => {
       //   activeGoal.isCompleted = false;
       // }
     }
-    await addXP(user._id, 10, 'Expense tracked');
+    //await addXP(user._id, 10, 'Expense tracked');
 
     await user.save();
 

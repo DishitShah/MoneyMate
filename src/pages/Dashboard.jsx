@@ -48,14 +48,17 @@ const TransactionModal = ({
           <div className="form-group">
             <label className="form-label">Category</label>
             <select
-              className="form-input"
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-            >
-              {categories.map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+  className="form-input bg-black text-white px-4 py-2 rounded-md"
+  value={category}
+  onChange={e => setCategory(e.target.value)}
+>
+  {categories.map(c => (
+    <option key={c} value={c} className="bg-black text-white">
+      {c}
+    </option>
+  ))}
+</select>
+
           </div>
         )}
         <div className="form-group">
@@ -150,6 +153,7 @@ const SetNewGoalCard = ({ onSave }) => {
   const [targetAmount, setTargetAmount] = useState('');
   const [targetDate, setTargetDate] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const guessIcon = (name) => {
     if (!name) return "🎯";
@@ -166,12 +170,13 @@ const SetNewGoalCard = ({ onSave }) => {
   const handleSave = async (e) => {
     e.preventDefault();
     if (!goalName || !targetAmount || !targetDate) {
-      alert("Please fill in all fields!");
+      setError("Please fill in all fields!");
       return;
     }
     setSaving(true);
+    setError('');
     try {
-      await fetch('/api/savings/new-goal', {
+      const res = await fetch('/api/savings/new-goal', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -183,22 +188,40 @@ const SetNewGoalCard = ({ onSave }) => {
           targetDate
         }),
       });
+      const data = await res.json();
+      if (!data.success) {
+        setError(data.message || "Failed to create goal");
+        setSaving(false);
+        return;
+      }
       setGoalName('');
       setTargetAmount('');
       setTargetDate('');
       if (onSave) onSave();
     } catch (err) {
-      alert("Failed to create goal");
+      setError("Failed to create goal");
     }
     setSaving(false);
   };
 
   return (
     <div className="card new-goal-card" style={{
-      background: "linear-gradient(135deg, #ffd93d 0%, #ff6b6b 100%)",
-      color: "#222",
+      background: "linear-gradient(135deg,rgba(27, 26, 25, 0) 0%,rgba(39, 32, 32, 0) 100%)",
+      color: "#fff",
       boxShadow: "0 5px 18px rgba(255, 107, 107, 0.10)"
     }}>
+      {error && (
+        <div style={{
+          background: "#ff6b6b",
+          color: "#fff",
+          borderRadius: "10px",
+          padding: "0.8rem 1.2rem",
+          marginBottom: "10px",
+          textAlign: "center",
+          fontWeight: 600,
+          boxShadow: "0 2px 8px rgba(255,107,107,0.15)"
+        }}>{error}</div>
+      )}
       <h3 style={{
         marginBottom: "1rem",
         textAlign: "center",
@@ -214,19 +237,19 @@ const SetNewGoalCard = ({ onSave }) => {
         gap: "1.1rem"
       }}>
         <div>
-          <label className="form-label" style={{ color: "#ff6b6b", fontWeight: 700 }}>Goal Name</label>
+          <label className="form-label" style={{ color: "#fff", fontWeight: 700 }}>Goal Name</label>
           <input
             placeholder="Trip to Goa, iPhone, Emergency Fund..."
             value={goalName}
             onChange={e => setGoalName(e.target.value)}
             className="form-input"
-            style={{ color: "#222" }}
+            style={{ color: "#fff" }}
             autoFocus
           />
         </div>
         <div style={{ display: "flex", gap: "1rem" }}>
           <div style={{ flex: 1 }}>
-            <label className="form-label" style={{ color: "#ff6b6b", fontWeight: 700 }}>Target Amount</label>
+            <label className="form-label" style={{ color: "#fff", fontWeight: 700 }}>Target Amount</label>
             <input
               type="number"
               min="1"
@@ -234,17 +257,18 @@ const SetNewGoalCard = ({ onSave }) => {
               value={targetAmount}
               onChange={e => setTargetAmount(e.target.value)}
               className="form-input"
-              style={{ color: "#222" }}
+              style={{ color: "#fff" }}
             />
           </div>
           <div style={{ flex: 1 }}>
-            <label className="form-label" style={{ color: "#ff6b6b", fontWeight: 700 }}>Target Date</label>
+            <label className="form-label" style={{ color: "#fff", fontWeight: 700 }}>Target Date</label>
             <input
               type="date"
               value={targetDate}
+              min={new Date().toISOString().split('T')[0]}
               onChange={e => setTargetDate(e.target.value)}
               className="form-input"
-              style={{ color: "#222" }}
+              style={{ color: "#fff" }}
             />
           </div>
         </div>
@@ -260,8 +284,8 @@ const SetNewGoalCard = ({ onSave }) => {
           className="cta-button"
           style={{
             width: "100%",
-            background: "linear-gradient(90deg, #00ff88, #ffd93d, #ff6b6b)",
-            color: "#222",
+            background: "linear-gradient(90deg, #00ff88, #ffd93d, #ff6b6b )",
+            color: "#fff",
             fontWeight: 700,
             fontSize: "1.09rem",
             padding: "0.9rem 0",
@@ -326,19 +350,15 @@ const [newGoalAmount, setNewGoalAmount] = useState("");
   });
 
   // Onboarding Form Data
-  const [formData, setFormData] = useState({
-    name: "",
-    ageGroup: "18–24",
-    monthlyIncome: "",
-    spendingHabits: [],
-    trackingLevel: "",
-    savingGoal: "",
-    goalAmount: "",
-    goalDate: "",
-    alreadySaved: "",
-    reminderFreq: "2–3 times a week",
-    motivation: [],
-  });
+ const [formData, setFormData] = useState({
+  name: "",
+  ageGroup: "18–24",
+  monthlyIncome: "",
+  spendingHabits: [],
+  trackingLevel: "",
+  reminderFreq: "2–3 times a week",
+  motivation: [],
+});
 
   // Simulate navigation - replace with useNavigate() in real app
   const navigate = (path) => console.log(`Navigating to: ${path}`);
@@ -514,18 +534,14 @@ const [newGoalAmount, setNewGoalAmount] = useState("");
   const submitOnboarding = async () => {
     // Validation (compulsory)
     const required = [
-      ["name", "Please enter your name!"],
-      ["ageGroup", "Please select your age group!"],
-      ["monthlyIncome", "Please select your monthly income!"],
-      ["spendingHabits", "Please select at least one spending habit!"],
-      ["trackingLevel", "Please select your expense tracking status!"],
-      ["savingGoal", "Please enter a saving goal!"],
-      ["goalAmount", "Please enter a goal amount!"],
-      ["goalDate", "Please enter a goal date!"],
-      ["alreadySaved", "Please enter how much you've already saved!"],
-      ["reminderFreq", "Please choose a reminder frequency!"],
-      ["motivation", "Please select at least one motivation!"],
-    ];
+  ["name", "Please enter your name!"],
+  ["ageGroup", "Please select your age group!"],
+  ["monthlyIncome", "Please select your monthly income!"],
+  ["spendingHabits", "Please select at least one spending habit!"],
+  ["trackingLevel", "Please select your expense tracking status!"],
+  ["reminderFreq", "Please choose a reminder frequency!"],
+  ["motivation", "Please select at least one motivation!"],
+];
     for (let [field, msg] of required) {
       if (
         !formData[field] ||
@@ -539,18 +555,14 @@ const [newGoalAmount, setNewGoalAmount] = useState("");
     try {
       const token = localStorage.getItem("token");
       const payload = {
-        name: formData.name,
-        ageGroup: formData.ageGroup,
-        monthlyIncome: formData.monthlyIncome,
-        spendingHabits: formData.spendingHabits,
-        trackingLevel: formData.trackingLevel,
-        savingGoal: formData.savingGoal,
-        goalAmount: formData.goalAmount,
-        goalDeadline: formData.goalDate,
-        alreadySaved: formData.alreadySaved,
-        reminderFreq: formData.reminderFreq,
-        motivation: formData.motivation,
-      };
+  name: formData.name,
+  ageGroup: formData.ageGroup,
+  monthlyIncome: formData.monthlyIncome,
+  spendingHabits: formData.spendingHabits,
+  trackingLevel: formData.trackingLevel,
+  reminderFreq: formData.reminderFreq,
+  motivation: formData.motivation,
+};
       const res = await fetch("/api/onboarding", {
         method: "PATCH",
         headers: {
@@ -817,7 +829,7 @@ const goalAchieved = goalTarget > 0 && goalCurrent >= goalTarget;
         <div className="dashboard-grid">
           {/* Budget Meter */}
           <div className="card">
-  <h3 style={{ textAlign: "center", marginBottom: "1rem" }}>Budget Meter</h3>
+  <h3 style={{ textAlign: "center", marginBottom: "1rem" }}>Spending power meter</h3>
   <div className="budget-meter">
     <div className="meter-circle" style={{ background: meterGradient }}>
       <div className="meter-inner">
@@ -841,7 +853,10 @@ const goalAchieved = goalTarget > 0 && goalCurrent >= goalTarget;
       marginTop: "0.7rem",
     }}
   >
-      {userData.budgetValue < 100 ? "⚠️ Low Budget Left!" : ""}
+      {userData.budgetValue < 100 ? (
+  <span style={{ color: 'red' }}>⚠️ Low Budget Left!</span>
+) : null}
+
   </div>
 </div>
           {/* AI Assistant */}
@@ -926,7 +941,7 @@ const goalAchieved = goalTarget > 0 && goalCurrent >= goalTarget;
             </button>
             <div className="modal-header" style={{ marginTop: "2.5rem" }}>
               <h2>🚀 Quick Setup</h2>
-              <span>{currentStep}/5</span>
+              <span>{currentStep}/4</span>
             </div>
             <div className="xp-bar" style={{ marginBottom: "2rem" }}>
               <div className="xp-progress" style={{ width: `${(currentStep / 5) * 100}%` }}></div>
@@ -1043,54 +1058,6 @@ const goalAchieved = goalTarget > 0 && goalCurrent >= goalTarget;
                 case 4:
                   return (
                     <div className="form-step">
-                      <h3>🎯 What's your saving goal?</h3>
-                      <div className="form-group">
-                        <label className="form-label">Are you saving for something cool right now?</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          placeholder="PS5, iPhone 15, Trip to Goa, Emergency Fund..."
-                          value={formData.savingGoal}
-                          onChange={(e) => handleInputChange("savingGoal", e.target.value)}
-                        />
-                      </div>
-                      <div className="form-row" style={{ display: "flex", gap: "1rem" }}>
-                        <div className="form-group" style={{ flex: 1 }}>
-                          <label className="form-label">How much do you want to save for it?</label>
-                          <input
-                            type="number"
-                            className="form-input"
-                            placeholder="₹ Amount"
-                            value={formData.goalAmount}
-                            onChange={(e) => handleInputChange("goalAmount", e.target.value)}
-                          />
-                        </div>
-                        <div className="form-group" style={{ flex: 1 }}>
-                          <label className="form-label">By when do you want to achieve this?</label>
-                          <input
-                            type="date"
-                            className="form-input"
-                            value={formData.goalDate}
-                            onChange={(e) => handleInputChange("goalDate", e.target.value)}
-                          />
-                        </div>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">How much have you already saved towards this goal?</label>
-                        <input
-                          type="number"
-                          className="form-input"
-                          placeholder="₹ Amount"
-                          value={formData.alreadySaved}
-                          onChange={(e) => handleInputChange("alreadySaved", e.target.value)}
-                          min="0"
-                        />
-                      </div>
-                    </div>
-                  );
-                case 5:
-                  return (
-                    <div className="form-step">
                       <h3>⚡ Last bit - Your habits!</h3>
                       <div className="form-group">
                         <label className="form-label">How often do you want to be reminded to save or track your money?</label>
@@ -1147,7 +1114,7 @@ const goalAchieved = goalTarget > 0 && goalCurrent >= goalTarget;
               >
                 ← Back
               </button>
-              {currentStep < 5 ? (
+              {currentStep < 4 ? (
                 <button onClick={nextStep} className="cta-button">
                   Next →
                 </button>
