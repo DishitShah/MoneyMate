@@ -650,9 +650,7 @@ const goalAchieved = goalTarget > 0 && goalCurrent >= goalTarget;
       marginTop: "0.7rem",
     }}
   >
-    {userData.budgetValue < (userData.totalIncome * 0.2)
-      ? "⚠️ Low Budget Left!"
-      : `${100 - Math.round((userData.budgetValue / (userData.totalIncome || 1)) * 100)}% used`}
+      {userData.budgetValue < 100 ? "⚠️ Low Budget Left!" : ""}
   </div>
 </div>
           {/* AI Assistant */}

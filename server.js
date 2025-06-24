@@ -540,8 +540,9 @@ app.patch('/api/onboarding', authMiddleware, async (req, res) => {
   }
 });
 
-// --- Helper to get dashboard data (FIXED VERSION) ---
-const getDashboardData = (user) => {
+
+// --- Helper to get dashboard data (FIXED VERSION, ASYNC) ---
+const getDashboardData = async (user) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -558,25 +559,32 @@ const getDashboardData = (user) => {
 
   // Calculate budget remaining: monthly budget - expenses spent this month
   const budgetRemainingRaw = user.monthlyBudget + monthIncome - monthExpenses;
-const budgetRemaining = Math.max(0, budgetRemainingRaw);
+  const budgetRemaining = Math.max(0, budgetRemainingRaw);
   const budgetUsedPercentage = user.monthlyBudget > 0
-  ? Math.min(Math.max((monthExpenses / user.monthlyBudget) * 100, 0), 100)
-  : 0;
+    ? Math.min(Math.max((monthExpenses / user.monthlyBudget) * 100, 0), 100)
+    : 0;
 
-  // Calculate active goals with updated progress
+  // Mark completed goals in the real array
+  let goalCompleted = false;
+  user.savingsGoals.forEach(goal => {
+    if (!goal.isCompleted && goal.currentSaved >= goal.targetAmount) {
+      goal.isCompleted = true;
+      goalCompleted = true;
+    }
+  });
+  if (goalCompleted) {
+    await user.save();
+  }
+
   const activeGoals = user.savingsGoals
     .filter((g) => !g.isCompleted)
     .map((goal) => {
-      // Goal progress includes: initial saved + net income this month
-      const netIncomeThisMonth = monthIncome - monthExpenses;
-      const totalSavedForGoal = goal.currentSaved + Math.max(0, netIncomeThisMonth);
-      
       return {
         ...goal.toObject(),
-        currentSaved: totalSavedForGoal,
+        currentSaved: goal.currentSaved,
         progress: goal.targetAmount > 0
-  ? Math.min(Math.max(Math.round((totalSavedForGoal / goal.targetAmount) * 100), 0), 100)
-  : 0,
+          ? Math.min(Math.max(Math.round((goal.currentSaved / goal.targetAmount) * 100), 0), 100)
+          : 0,
         daysRemaining: Math.max(
           0,
           Math.ceil((new Date(goal.targetDate) - today) / (1000 * 60 * 60 * 24))
@@ -615,7 +623,6 @@ const budgetRemaining = Math.max(0, budgetRemainingRaw);
     },
   };
 };
-
 // ==== POST /api/finance/income (FIXED) ====
 app.post('/api/finance/income', authMiddleware, async (req, res) => {
   try {
@@ -644,7 +651,7 @@ app.post('/api/finance/income', authMiddleware, async (req, res) => {
     await user.save();
 
     // Get fresh dashboard data
-    const dashboard = getDashboardData(user);
+    const dashboard = await getDashboardData(user);
     
     res.json({ 
       success: true, 
@@ -685,7 +692,7 @@ app.post('/api/finance/expense', authMiddleware, async (req, res) => {
     await user.save();
 
     // Get fresh dashboard data
-    const dashboard = getDashboardData(user);
+    const dashboard = await getDashboardData(user);
     
     res.json({ 
       success: true, 
@@ -722,7 +729,7 @@ app.post('/api/savings/new-goal', authMiddleware, async (req, res) => {
     await user.save();
 
     // Optionally: return updated dashboard data
-    const dashboard = getDashboardData(user);
+    const dashboard = await getDashboardData(user);
 
     res.json({
       success: true,
@@ -741,7 +748,7 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
     const user = await User.findById(req.user._id);
     res.json({
       success: true,
-      dashboard: getDashboardData(user),
+      dashboard: await getDashboardData(user),
     });
   } catch (error) {
     console.error('🔴 Dashboard Error:', error.message);
