@@ -646,8 +646,15 @@ app.post('/api/finance/income', authMiddleware, async (req, res) => {
     user.currentBalance += Number(amount);
 
     // Add XP for income tracking
-    await addXP(user._id, 25, 'Income added');
+    const activeGoal = user.savingsGoals.find(g => !g.isCompleted);
+    if (activeGoal) {
+      activeGoal.currentSaved += Number(amount);
+      if (activeGoal.currentSaved >= activeGoal.targetAmount) {
+        activeGoal.isCompleted = true;
+      }
+    }
 
+    await addXP(user._id, 25, 'Income added');
     await user.save();
 
     // Get fresh dashboard data
@@ -687,6 +694,14 @@ app.post('/api/finance/expense', authMiddleware, async (req, res) => {
     user.currentBalance -= Number(amount);
 
     // Add XP for expense tracking
+    const activeGoal = user.savingsGoals.find(g => !g.isCompleted);
+    if (activeGoal) {
+      activeGoal.currentSaved = Math.max(0, activeGoal.currentSaved - Number(amount));
+      // If you want, you may mark as not completed if it drops below target (optional)
+      // if (activeGoal.currentSaved < activeGoal.targetAmount) {
+      //   activeGoal.isCompleted = false;
+      // }
+    }
     await addXP(user._id, 10, 'Expense tracked');
 
     await user.save();

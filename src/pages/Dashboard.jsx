@@ -85,7 +85,196 @@ const TransactionModal = ({
     </div>
   );
 };
+// --- SavingsGoalCard ---
+const SavingsGoalCard = ({
+  goalName,
+  goalIcon,
+  goalCurrent,
+  goalTarget,
+  goalPercent,
+  goalCompleteBy,
+}) => (
+  <div className="card">
+    <h3 style={{ marginBottom: "1rem" }}>
+      🎯 Savings Goal: {goalName}
+    </h3>
+    <div style={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center"
+    }}>
+      <div>
+        <div style={{
+          fontSize: "1.5rem",
+          fontWeight: "bold",
+          color: "#00ff88"
+        }}>
+          ₹{goalCurrent?.toLocaleString() ?? 0} / ₹{goalTarget?.toLocaleString() ?? 0}
+        </div>
+        <div style={{ opacity: 0.8 }}>
+          {goalPercent}% Complete
+          {goalCompleteBy && ` - until ${goalCompleteBy}`}
+        </div>
+      </div>
+      <div style={{ fontSize: "3rem" }}>
+        {goalIcon}
+      </div>
+    </div>
+    <div className="xp-bar" style={{ marginTop: "1rem" }}>
+      <div
+        className="xp-progress"
+        style={{
+          width: `${goalPercent}%`,
+          background: "linear-gradient(90deg, #00ff88, #ffd93d, #ff6b6b)"
+        }}
+      ></div>
+    </div>
+    {goalPercent === 100 && (
+      <div style={{
+        marginTop: "1.5rem",
+        textAlign: "center",
+        color: "#ffd93d",
+        fontSize: "1.2rem",
+        fontWeight: 600,
+        letterSpacing: "0.5px"
+      }}>
+        🎉 Congrats! You achieved your goal!
+      </div>
+    )}
+  </div>
+);
 
+// --- SetNewGoalCard (UI/UX matched) ---
+const SetNewGoalCard = ({ onSave }) => {
+  const [goalName, setGoalName] = useState('');
+  const [targetAmount, setTargetAmount] = useState('');
+  const [targetDate, setTargetDate] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const guessIcon = (name) => {
+    if (!name) return "🎯";
+    const n = name.toLowerCase();
+    if (n.includes("trip") || n.includes("travel")) return "✈️";
+    if (n.includes("iphone") || n.includes("phone")) return "📱";
+    if (n.includes("ps5") || n.includes("playstation")) return "🎮";
+    if (n.includes("car")) return "🚗";
+    if (n.includes("house") || n.includes("home")) return "🏠";
+    if (n.includes("emergency")) return "🚨";
+    return "🎯";
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!goalName || !targetAmount || !targetDate) {
+      alert("Please fill in all fields!");
+      return;
+    }
+    setSaving(true);
+    try {
+      await fetch('/api/savings/new-goal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          goalName,
+          targetAmount,
+          targetDate
+        }),
+      });
+      setGoalName('');
+      setTargetAmount('');
+      setTargetDate('');
+      if (onSave) onSave();
+    } catch (err) {
+      alert("Failed to create goal");
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="card new-goal-card" style={{
+      background: "linear-gradient(135deg, #ffd93d 0%, #ff6b6b 100%)",
+      color: "#222",
+      boxShadow: "0 5px 18px rgba(255, 107, 107, 0.10)"
+    }}>
+      <h3 style={{
+        marginBottom: "1rem",
+        textAlign: "center",
+        fontWeight: 800,
+        fontSize: "1.4rem"
+      }}>
+        <span style={{ fontSize: "2rem", marginRight: 8 }}>✨</span>
+        Set a New Savings Goal!
+      </h3>
+      <form onSubmit={handleSave} style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "1.1rem"
+      }}>
+        <div>
+          <label className="form-label" style={{ color: "#ff6b6b", fontWeight: 700 }}>Goal Name</label>
+          <input
+            placeholder="Trip to Goa, iPhone, Emergency Fund..."
+            value={goalName}
+            onChange={e => setGoalName(e.target.value)}
+            className="form-input"
+            style={{ color: "#222" }}
+            autoFocus
+          />
+        </div>
+        <div style={{ display: "flex", gap: "1rem" }}>
+          <div style={{ flex: 1 }}>
+            <label className="form-label" style={{ color: "#ff6b6b", fontWeight: 700 }}>Target Amount</label>
+            <input
+              type="number"
+              min="1"
+              placeholder="₹ Amount"
+              value={targetAmount}
+              onChange={e => setTargetAmount(e.target.value)}
+              className="form-input"
+              style={{ color: "#222" }}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label className="form-label" style={{ color: "#ff6b6b", fontWeight: 700 }}>Target Date</label>
+            <input
+              type="date"
+              value={targetDate}
+              onChange={e => setTargetDate(e.target.value)}
+              className="form-input"
+              style={{ color: "#222" }}
+            />
+          </div>
+        </div>
+        <div style={{
+          textAlign: "center",
+          fontSize: "2.3rem",
+          margin: "0.5rem 0"
+        }}>
+          {guessIcon(goalName)}
+        </div>
+        <button
+          type="submit"
+          className="cta-button"
+          style={{
+            width: "100%",
+            background: "linear-gradient(90deg, #00ff88, #ffd93d, #ff6b6b)",
+            color: "#222",
+            fontWeight: 700,
+            fontSize: "1.09rem",
+            padding: "0.9rem 0",
+            borderRadius: "16px"
+          }}
+          disabled={saving}
+        >
+          {saving ? "Creating..." : "Create Goal"}
+        </button>
+      </form>
+    </div>
+  );
+};
 const expenseCategories = [
   "🍔 Food & Drinks",
   "🚗 Travel / Fuel",
@@ -424,27 +613,27 @@ const [newGoalAmount, setNewGoalAmount] = useState("");
 
   // --- Transactions ---
   const handleAddIncome = async ({ amount, note }) => {
-    if (!amount || isNaN(Number(amount))) {
-      alert("Please enter a valid income amount.");
-      return;
-    }
+  if (!amount || isNaN(Number(amount))) {
+    alert("Please enter a valid income amount.");
+    return;
+  }
 
-    try {
-      const token = localStorage.getItem("token");
-      console.log("Submitting income:", amount, note);
-      const res = await fetch("/api/finance/income", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ amount: Number(amount), note }),
-      });
-      const data = await res.json();
+  try {
+    const token = localStorage.getItem("token");
+    const res = await fetch("/api/finance/income", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ amount: Number(amount), note }),
+    });
+    const data = await res.json();
       console.log("Income API response:", data);
 
       if (data.success) {
         if (data.dashboard) {
+          
           const d = data.dashboard;
           const mainGoal = d.goals && d.goals[0] ? d.goals[0] : null;
           const newUserData = {
@@ -473,32 +662,33 @@ const [newGoalAmount, setNewGoalAmount] = useState("");
           setLastAction("income"); // update last action here
         }
         setShowIncomeModal(false);
-      } else {
-        alert(data.message || "Error adding income");
-      }
-    } catch (error) {
-      console.error('Error adding income:', error);
-      alert("Error adding income");
+      await refreshDashboard();
+      setLastAction("income");
+    } else {
+      alert(data.message || "Error adding income");
     }
-  };
+  } catch (error) {
+    alert("Error adding income");
+  }
+};
   
 
   const handleAddExpense = async ({ amount, note, category }) => {
-    if (!amount || isNaN(Number(amount))) {
-      alert("Please enter a valid expense amount.");
-      return;
-    }
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("/api/finance/expense", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ amount: Number(amount), note, category }),
-      });
-      const data = await res.json();
+  if (!amount || isNaN(Number(amount))) {
+    alert("Please enter a valid expense amount.");
+    return;
+  }
+  try {
+    const token = localStorage.getItem("token");
+    const res = await fetch("/api/finance/expense", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ amount: Number(amount), note, category }),
+    });
+    const data = await res.json();
       if (data.success) {
         if (data.dashboard) {
           const d = data.dashboard;
@@ -527,14 +717,15 @@ const [newGoalAmount, setNewGoalAmount] = useState("");
           setLastAction("expense"); // update last action here
         }
         setShowExpenseModal(false);
-      } else {
-        alert(data.message || "Error adding expense");
-      }
-    } catch (error) {
-      console.error('Error adding expense:', error);
-      alert("Error adding expense");
+      await refreshDashboard();
+      setLastAction("expense");
+    } else {
+      alert(data.message || "Error adding expense");
     }
-  };
+  } catch (error) {
+    alert("Error adding expense");
+  }
+};
   const handleSetNewGoal = async (e) => {
   e.preventDefault();
   if (!newGoalName || !newGoalAmount) {
@@ -703,28 +894,23 @@ const goalAchieved = goalTarget > 0 && goalCurrent >= goalTarget;
         </div>
 
         {/* Savings Goal */}
-        <div className="card">
-          <h3 style={{ marginBottom: "1rem" }}>
-            🎯 Savings Goal: {goalName}
-          </h3>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <div style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#00ff88" }}>
-                ₹{goalCurrent.toLocaleString()} / ₹{goalTarget.toLocaleString()}
-              </div>
-              <div style={{ opacity: 0.8 }}>
-                {goalPercent}% Complete
-                {userData.goalCompleteBy && ` - until ${userData.goalCompleteBy}`}
-              </div>
-            </div>
-            <div style={{ fontSize: "3rem" }}>
-              {goalIcon}
-            </div>
-          </div>
-          <div className="xp-bar" style={{ marginTop: "1rem" }}>
-            <div className="xp-progress" style={{ width: `${goalPercent}%` }}></div>
-          </div>
-        </div>
+        {/* --- SAVINGS GOAL SECTION --- */}
+{profileCompleted && (
+  <>
+    {(goalTarget === 0 || goalAchieved) ? (
+      <SetNewGoalCard onSave={refreshDashboard} />
+    ) : (
+      <SavingsGoalCard
+        goalName={goalName}
+        goalIcon={goalIcon}
+        goalCurrent={goalCurrent}
+        goalTarget={goalTarget}
+        goalPercent={goalPercent}
+        goalCompleteBy={userData.goalCompleteBy}
+      />
+    )}
+  </>
+)}
       </div>
 
       {/* Onboarding Modal */}
