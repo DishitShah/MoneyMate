@@ -484,6 +484,38 @@ app.patch('/api/auth/me', authMiddleware, async (req, res) => {
   }
 });
 
+// --- Export all user transactions as CSV ---
+app.get('/api/transactions/export', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Build CSV header
+    const header = "Amount,Type,Category,Description,Date\n";
+    const rows = user.transactions.map(t =>
+      [
+        t.amount,
+        t.type,
+        `"${t.category.replace(/"/g, '""')}"`,
+        `"${(t.description || '').replace(/"/g, '""')}"`,
+        new Date(t.date).toISOString()
+      ].join(',')
+    );
+
+    const csv = header + rows.join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=transactions.csv');
+    res.send(csv);
+  } catch (error) {
+    console.error('🔴 Export Transactions Error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error exporting transactions' });
+  }
+});
+
 // --- ONBOARDING PATCH ENDPOINT (UPDATED) ---
 app.patch('/api/onboarding', authMiddleware, async (req, res) => {
   try {
@@ -1072,6 +1104,95 @@ app.post('/api/voice', authMiddleware, async (req, res) => {
       success: false,
       message: 'Voice synthesis temporarily unavailable',
     });
+  }
+});
+
+// --- Voice Assistant Combo Endpoint ---
+app.post('/api/voice-assistant', authMiddleware, async (req, res) => {
+  try {
+    const { question } = req.body;
+    if (!question) return res.status(400).json({ success: false, message: 'Please provide a question' });
+
+    const user = await User.findById(req.user._id);
+
+    // Build user context for OpenAI
+    const recentTransactions = user.transactions
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 5)
+      .map(t => `${t.type}: ₹${t.amount} for ${t.category} (${t.description}) on ${new Date(t.date).toLocaleDateString()}`)
+      .join(', ');
+
+    const activeGoals = user.savingsGoals
+      .filter(g => !g.isCompleted)
+      .map(g => `${g.goalName} (₹${g.currentSaved}/₹${g.targetAmount}, target: ${new Date(g.targetDate).toLocaleDateString()})`)
+      .join(', ');
+
+    const context = `
+User Profile:
+- Name: ${user.name}
+- Current Balance: ₹${user.currentBalance}
+- Monthly Budget: ₹${user.monthlyBudget}
+- XP Level: ${user.level}
+- Streak: ${user.streak}
+- Active Goals: ${activeGoals}
+- Recent Transactions: ${recentTransactions}
+`;
+
+    const prompt = `You are MoneyMate, a fun and friendly AI financial coach for Gen Z and millennials. 
+You speak casually, use emojis, and give practical money advice. 
+Keep responses under 100 words and be encouraging.
+
+${context}
+
+User Question: ${question}
+
+Respond as MoneyMate:`;
+
+    // 1. Get AI answer from OpenAI
+    const openAiRes = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-3.5-turbo',
+        messages: [
+          { role: 'system', content: prompt },
+          { role: 'user', content: question }
+        ],
+        max_tokens: 150,
+        temperature: 0.7,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    const aiAnswer = openAiRes.data.choices[0].message.content;
+
+    // 2. Get audio from ElevenLabs
+    const voiceRes = await axios.post(
+      'https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL',
+      {
+        text: aiAnswer.substring(0, 500),
+        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+      },
+      {
+        headers: {
+          'xi-api-key': process.env.ELEVENLABS_API_KEY,
+          'Content-Type': 'application/json',
+        },
+        responseType: 'arraybuffer',
+      }
+    );
+    const audioBase64 = Buffer.from(voiceRes.data).toString('base64');
+    const audioUrl = `data:audio/mpeg;base64,${audioBase64}`;
+
+    await addXP(user._id, 5, 'AI Voice interaction');
+
+    res.json({ success: true, answer: aiAnswer, audio: audioUrl });
+  } catch (error) {
+    console.error('🔴 Voice Assistant Error:', error.message);
+    res.status(500).json({ success: false, message: 'Voice assistant error' });
   }
 });
 

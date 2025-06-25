@@ -1242,16 +1242,16 @@ const goalAchieved = goalTarget > 0 && goalCurrent >= goalTarget;
           justify-content: center;
         }
         .meter-circle {
-          width: 170px;
-          height: 170px;
+          width: 200px;
+          height: 200px;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
         }
         .meter-inner {
-          width: 120px;
-          height: 120px;
+          width: 180px;
+          height: 180px;
           background: rgba(10,10,10,0.9);
           border-radius: 50%;
           display: flex;

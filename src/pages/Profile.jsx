@@ -19,6 +19,29 @@ const Profile = () => {
   useEffect(() => {
     fetchUserData();
   }, []);
+  // Add this inside your Profile component, before the return statement
+
+const handleDownloadTransactions = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch('/api/transactions/export', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Failed to download transactions');
+    const blob = await res.blob();
+    // Create a temporary link to trigger download
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'transactions.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    alert('Error downloading transactions');
+  }
+};
 
   const fetchUserData = async () => {
     try {
@@ -204,27 +227,42 @@ const Profile = () => {
         <div className="card">
           <h3 style={{ marginBottom: '1rem' }}>⚙️ Account Settings</h3>
           
-          {!isEditing ? (
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-              gap: '1rem' 
-            }}>
-              <button className="cta-button" onClick={handleEditToggle}>
-                📝 Edit Profile
-              </button>
-              <button 
-                className="cta-button" 
-                onClick={handleLogout}
-                style={{ 
-                  background: 'linear-gradient(45deg, #ff6b6b, #ff4757)',
-                  color: '#ffffff'
-                }}
-              >
-                🚪 Logout
-              </button>
-            </div>
-          ) : (
+         {!isEditing ? (
+  <div style={{ display: 'grid', gap: '1rem' }}>
+    
+    {/* Line 1: Two buttons side by side */}
+    <div style={{ display: 'flex', gap: '1rem' }}>
+      <button className="cta-button" onClick={handleEditToggle} style={{ flex: 1 }}>
+        📝 Edit Profile
+      </button>
+      <button 
+        className="cta-button"
+        onClick={handleDownloadTransactions}
+        style={{
+          flex: 1,
+          background: 'linear-gradient(45deg, #ffd93d, #00ff88)',
+          color: '#000000'
+        }}
+      >
+        ⬇️ Download Transactions
+      </button>
+    </div>
+
+    {/* Line 2: One button same width as above two combined */}
+    <button 
+      className="cta-button" 
+      onClick={handleLogout}
+      style={{ 
+        width: '100%',
+        background: 'linear-gradient(45deg, #ff6b6b, #ff4757)',
+        color: '#ffffff'
+      }}
+    >
+      🚪 Logout
+    </button>
+
+  </div>
+) : (
             <form onSubmit={handleSaveProfile}>
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ display: 'block', marginBottom: '0.5rem', color: '#00d4ff' }}>
