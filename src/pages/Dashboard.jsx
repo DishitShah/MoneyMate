@@ -314,6 +314,7 @@ const Dashboard = () => {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [profileCompleted, setProfileCompleted] = useState(false);
+  const [formErrors, setFormErrors] = useState({});
 
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
@@ -510,80 +511,93 @@ const [newGoalAmount, setNewGoalAmount] = useState("");
   
 
   // --- Form Handlers ---
-  const handleInputChange = (field, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-  const handleMultiSelect = (field, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: prev[field].includes(value)
-        ? prev[field].filter((item) => item !== value)
-        : [...prev[field], value],
-    }));
-  };
-  const nextStep = () => {
-    if (currentStep < 5) setCurrentStep(currentStep + 1);
-  };
-  const prevStep = () => {
-    if (currentStep > 1) setCurrentStep(currentStep - 1);
-  };
-
-  const submitOnboarding = async () => {
-    // Validation (compulsory)
-    const required = [
-  ["name", "Please enter your name!"],
-  ["ageGroup", "Please select your age group!"],
-  ["monthlyIncome", "Please select your monthly income!"],
-  ["spendingHabits", "Please select at least one spending habit!"],
-  ["trackingLevel", "Please select your expense tracking status!"],
-  ["reminderFreq", "Please choose a reminder frequency!"],
-  ["motivation", "Please select at least one motivation!"],
-];
-    for (let [field, msg] of required) {
-      if (
-        !formData[field] ||
-        (Array.isArray(formData[field]) && formData[field].length === 0)
-      ) {
-        alert(msg);
-        return;
-      }
-    }
-    // API Call
-    try {
-      const token = localStorage.getItem("token");
-      const payload = {
-  name: formData.name,
-  ageGroup: formData.ageGroup,
-  monthlyIncome: formData.monthlyIncome,
-  spendingHabits: formData.spendingHabits,
-  trackingLevel: formData.trackingLevel,
-  reminderFreq: formData.reminderFreq,
-  motivation: formData.motivation,
+const handleInputChange = (field, value) => {
+  setFormData((prev) => ({
+    ...prev,
+    [field]: value,
+  }));
+  setFormErrors((prev) => ({
+    ...prev,
+    [field]: "", // clear error when user edits
+  }));
 };
-      const res = await fetch("/api/onboarding", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setProfileCompleted(true);
-        setShowOnboarding(false);
-        // Re-fetch dashboard data for personalized values
-        await refreshDashboard();
-      } else {
-        alert(data.message || "Failed to save onboarding!");
-      }
-    } catch (e) {
-      alert("Error saving onboarding: " + e.message);
+const handleMultiSelect = (field, value) => {
+  setFormData((prev) => ({
+    ...prev,
+    [field]: prev[field].includes(value)
+      ? prev[field].filter((item) => item !== value)
+      : [...prev[field], value],
+  }));
+  setFormErrors((prev) => ({
+    ...prev,
+    [field]: "", // clear error when user edits
+  }));
+};
+const nextStep = () => {
+  if (currentStep < 5) setCurrentStep(currentStep + 1);
+};
+const prevStep = () => {
+  if (currentStep > 1) setCurrentStep(currentStep - 1);
+};
+
+const submitOnboarding = async () => {
+  // Validation (compulsory)
+  const required = [
+    ["name", "Please enter your name!"],
+    ["ageGroup", "Please select your age group!"],
+    ["monthlyIncome", "Please select your monthly income!"],
+    ["spendingHabits", "Please select at least one spending habit!"],
+    ["trackingLevel", "Please select your expense tracking status!"],
+    ["reminderFreq", "Please choose a reminder frequency!"],
+    ["motivation", "Please select at least one motivation!"],
+  ];
+  let errors = {};
+  for (let [field, msg] of required) {
+    if (
+      !formData[field] ||
+      (Array.isArray(formData[field]) && formData[field].length === 0)
+    ) {
+      errors[field] = msg;
     }
-  };
+  }
+  setFormErrors(errors);
+  if (Object.keys(errors).length > 0) {
+    // Stop submission if any errors
+    return;
+  }
+  // API Call
+   try {
+    const token = localStorage.getItem("token");
+    const payload = {
+      name: formData.name,
+      ageGroup: formData.ageGroup,
+      monthlyIncome: formData.monthlyIncome,
+      spendingHabits: formData.spendingHabits,
+      trackingLevel: formData.trackingLevel,
+      reminderFreq: formData.reminderFreq,
+      motivation: formData.motivation,
+    };
+    const res = await fetch("/api/onboarding", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.success) {
+      setProfileCompleted(true);
+      setShowOnboarding(false);
+      await refreshDashboard();
+    } else {
+      alert(data.message || "Failed to save onboarding!");
+    }
+  } catch (e) {
+    alert("Error saving onboarding: " + e.message);
+  }
+};
+
 
   // --- Utility function: Always fetch latest dashboard after any update!
   const refreshDashboard = async () => {
@@ -948,158 +962,179 @@ const goalAchieved = goalTarget > 0 && goalCurrent >= goalTarget;
             </div>
             {/* Form Step */}
             {(() => {
-              switch (currentStep) {
-                case 1:
-                  return (
-                    <div className="form-step">
-                      <h3>👤 Let's get to know you!</h3>
-                      <div className="form-group">
-                        <label className="form-label">What should we call you?</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          placeholder="Enter your first name"
-                          value={formData.name}
-                          onChange={(e) => handleInputChange("name", e.target.value)}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">What's your age group?</label>
-                        <div className="option-grid">
-                          {["Under 13", "13–17", "18–24", "25–30", "30+"].map((age) => (
-                            <div
-                              key={age}
-                              className={`option-card ${formData.ageGroup === age ? "selected" : ""}`}
-                              onClick={() => handleInputChange("ageGroup", age)}
-                            >
-                              {age}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                case 2:
-                  return (
-                    <div className="form-step">
-                      <h3>🪙 Money Talk Time!</h3>
-                      <div className="form-group">
-                        <label className="form-label">How much money do you usually get each month?</label>
-                        <p className="form-tip">
-                          From pocket money, salary, freelance, side hustles, etc.
-                        </p>
-                        <div className="option-grid">
-                          {[
-                            "₹0 – ₹500",
-                            "₹500 – ₹1,000",
-                            "₹1,000 – ₹3,000",
-                            "₹3,000 – ₹5,000",
-                            "₹5,000 – ₹10,000",
-                            "₹10,000 – ₹25,000",
-                            "₹25,000 – ₹50,000",
-                            "₹50,000+",
-                          ].map((income) => (
-                            <div
-                              key={income}
-                              className={`option-card ${formData.monthlyIncome === income ? "selected" : ""}`}
-                              onClick={() => handleInputChange("monthlyIncome", income)}
-                            >
-                              {income}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                case 3:
-                  return (
-                    <div className="form-step">
-                      <h3>💸 Spending Vibes Check</h3>
-                      <div className="form-group">
-                        <label className="form-label">What do you usually spend on the most?</label>
-                        <p className="form-tip">
-                          Pick all that apply! 👆
-                        </p>
-                        <div className="option-grid multi-select">
-                          {[
-                            "🍔 Food & Drinks",
-                            "🚗 Travel / Fuel",
-                            "🛍️ Shopping",
-                            "🎮 Gaming / Subscriptions",
-                            "💝 Gifting / Dating",
-                            "📚 College / Books",
-                          ].map((habit) => (
-                            <div
-                              key={habit}
-                              className={`option-card ${formData.spendingHabits.includes(habit) ? "selected" : ""}`}
-                              onClick={() => handleMultiSelect("spendingHabits", habit)}
-                            >
-                              {habit}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Do you keep track of your expenses right now?</label>
-                        <div className="option-grid">
-                          {["Not at all", "A little", "Yes, I try!"].map((track) => (
-                            <div
-                              key={track}
-                              className={`option-card ${formData.trackingLevel === track ? "selected" : ""}`}
-                              onClick={() => handleInputChange("trackingLevel", track)}
-                            >
-                              {track}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                case 4:
-                  return (
-                    <div className="form-step">
-                      <h3>⚡ Last bit - Your habits!</h3>
-                      <div className="form-group">
-                        <label className="form-label">How often do you want to be reminded to save or track your money?</label>
-                        <div className="option-grid">
-                          {["Every day", "2–3 times a week", "Once a week", "Only when I overspend 😅"].map((freq) => (
-                            <div
-                              key={freq}
-                              className={`option-card ${formData.reminderFreq === freq ? "selected" : ""}`}
-                              onClick={() => handleInputChange("reminderFreq", freq)}
-                            >
-                              {freq}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">What motivates you to save?</label>
-                        <p className="form-tip">Pick all that apply! 🎯</p>
-                        <div className="option-grid multi-select">
-                          {[
-                            "🏆 Unlocking rewards",
-                            "🛒 Buying something big",
-                            "😌 Feeling secure",
-                            "👥 Competing with friends",
-                            "🤖 Getting praise from AI",
-                          ].map((motivation) => (
-                            <div
-                              key={motivation}
-                              className={`option-card ${formData.motivation.includes(motivation) ? "selected" : ""}`}
-                              onClick={() => handleMultiSelect("motivation", motivation)}
-                            >
-                              {motivation}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                default:
-                  return null;
-              }
-            })()}
+  switch (currentStep) {
+    case 1:
+      return (
+        <div className="form-step">
+          <h3>👤 Let's get to know you!</h3>
+          <div className="form-group">
+            <label className="form-label">What should we call you?*</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Enter your first name"
+              value={formData.name}
+              onChange={(e) => handleInputChange("name", e.target.value)}
+            />
+            {formErrors.name && (
+              <div className="form-error">{formErrors.name}</div>
+            )}
+          </div>
+          <div className="form-group">
+            <label className="form-label">What's your age group?*</label>
+            <div className="option-grid">
+              {["Under 13", "13–17", "18–24", "25–30", "30+"].map((age) => (
+                <div
+                  key={age}
+                  className={`option-card ${formData.ageGroup === age ? "selected" : ""}`}
+                  onClick={() => handleInputChange("ageGroup", age)}
+                >
+                  {age}
+                </div>
+              ))}
+            </div>
+            {formErrors.ageGroup && (
+              <div className="form-error">{formErrors.ageGroup}</div>
+            )}
+          </div>
+        </div>
+      );
+    case 2:
+      return (
+        <div className="form-step">
+          <h3>🪙 Money Talk Time!</h3>
+          <div className="form-group">
+            <label className="form-label">How much money do you usually get each month?*</label>
+            <p className="form-tip">
+              From pocket money, salary, freelance, side hustles, etc.
+            </p>
+            <div className="option-grid">
+              {[
+                "₹0 – ₹500",
+                "₹500 – ₹1,000",
+                "₹1,000 – ₹3,000",
+                "₹3,000 – ₹5,000",
+                "₹5,000 – ₹10,000",
+                "₹10,000 – ₹25,000",
+                "₹25,000 – ₹50,000",
+                "₹50,000+",
+              ].map((income) => (
+                <div
+                  key={income}
+                  className={`option-card ${formData.monthlyIncome === income ? "selected" : ""}`}
+                  onClick={() => handleInputChange("monthlyIncome", income)}
+                >
+                  {income}
+                </div>
+              ))}
+            </div>
+            {formErrors.monthlyIncome && (
+              <div className="form-error">{formErrors.monthlyIncome}</div>
+            )}
+          </div>
+        </div>
+      );
+    case 3:
+      return (
+        <div className="form-step">
+          <h3>💸 Spending Vibes Check</h3>
+          <div className="form-group">
+            <label className="form-label">What do you usually spend on the most?*</label>
+            <p className="form-tip">
+              Pick all that apply! 👆
+            </p>
+            <div className="option-grid multi-select">
+              {[
+                "🍔 Food & Drinks",
+                "🚗 Travel / Fuel",
+                "🛍️ Shopping",
+                "🎮 Gaming / Subscriptions",
+                "💝 Gifting / Dating",
+                "📚 College / Books",
+              ].map((habit) => (
+                <div
+                  key={habit}
+                  className={`option-card ${formData.spendingHabits.includes(habit) ? "selected" : ""}`}
+                  onClick={() => handleMultiSelect("spendingHabits", habit)}
+                >
+                  {habit}
+                </div>
+              ))}
+            </div>
+            {formErrors.spendingHabits && (
+              <div className="form-error">{formErrors.spendingHabits}</div>
+            )}
+          </div>
+          <div className="form-group">
+            <label className="form-label">Do you keep track of your expenses right now?*</label>
+            <div className="option-grid">
+              {["Not at all", "A little", "Yes, I try!"].map((track) => (
+                <div
+                  key={track}
+                  className={`option-card ${formData.trackingLevel === track ? "selected" : ""}`}
+                  onClick={() => handleInputChange("trackingLevel", track)}
+                >
+                  {track}
+                </div>
+              ))}
+            </div>
+            {formErrors.trackingLevel && (
+              <div className="form-error">{formErrors.trackingLevel}</div>
+            )}
+          </div>
+        </div>
+      );
+    case 4:
+      return (
+        <div className="form-step">
+          <h3>⚡ Last bit - Your habits!</h3>
+          <div className="form-group">
+            <label className="form-label">How often do you want to be reminded to save or track your money?*</label>
+            <div className="option-grid">
+              {["Every day", "2–3 times a week", "Once a week", "Only when I overspend 😅"].map((freq) => (
+                <div
+                  key={freq}
+                  className={`option-card ${formData.reminderFreq === freq ? "selected" : ""}`}
+                  onClick={() => handleInputChange("reminderFreq", freq)}
+                >
+                  {freq}
+                </div>
+              ))}
+            </div>
+            {formErrors.reminderFreq && (
+              <div className="form-error">{formErrors.reminderFreq}</div>
+            )}
+          </div>
+          <div className="form-group">
+            <label className="form-label">What motivates you to save?*</label>
+            <p className="form-tip">Pick all that apply! 🎯</p>
+            <div className="option-grid multi-select">
+              {[
+                "🏆 Unlocking rewards",
+                "🛒 Buying something big",
+                "😌 Feeling secure",
+                "👥 Competing with friends",
+                "🤖 Getting praise from AI",
+              ].map((motivation) => (
+                <div
+                  key={motivation}
+                  className={`option-card ${formData.motivation.includes(motivation) ? "selected" : ""}`}
+                  onClick={() => handleMultiSelect("motivation", motivation)}
+                >
+                  {motivation}
+                </div>
+              ))}
+            </div>
+            {formErrors.motivation && (
+              <div className="form-error">{formErrors.motivation}</div>
+            )}
+          </div>
+        </div>
+      );
+    default:
+      return null;
+  }
+})()}
             <div className="modal-nav">
               <button
                 onClick={prevStep}
@@ -1373,6 +1408,12 @@ const goalAchieved = goalTarget > 0 && goalCurrent >= goalTarget;
             grid-template-columns: 1fr;
           }
         }
+          .form-error {
+    color: #ff6b6b;
+    margin-top: 0.4rem;
+    font-size: 0.97rem;
+    font-weight: 600;
+  }
       `}</style>
     </div>
   );

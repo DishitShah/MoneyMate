@@ -8,6 +8,7 @@ const dummyExpenseData = [
   { category: 'Shopping', amount: 5100, percentage: 24, color: '#00d4ff' }
 ];
 
+
 const Analytics = () => {
   const [analytics, setAnalytics] = useState(null);
   const [lastMonth, setLastMonth] = useState(null);
