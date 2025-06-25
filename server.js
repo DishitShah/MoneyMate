@@ -79,7 +79,8 @@ const userSchema = new mongoose.Schema(
         earnedAt: { type: Date, default: Date.now },
       },
     ],
-    
+    // ...inside userSchema = new mongoose.Schema({ ... })
+    trackedExpenses: { type: Number, default: 0 },
     currentBalance: { type: Number, default: 0 },
     monthlyBudget: { type: Number, default: 0 },
     totalSaved: { type: Number, default: 0 },
@@ -594,15 +595,19 @@ const meterPercentage = meterMax > 0 ? (meterCurrent / meterMax) * 100 : 0;
 
   // Mark completed goals in the real array
   let goalCompleted = false;
-  user.savingsGoals.forEach(goal => {
-    if (!goal.isCompleted && goal.currentSaved >= goal.targetAmount) {
-      goal.isCompleted = true;
-      goalCompleted = true;
+user.savingsGoals.forEach(goal => {
+  if (!goal.isCompleted && goal.currentSaved >= goal.targetAmount) {
+    goal.isCompleted = true;
+    goalCompleted = true;
+    // Add Savings Hero badge if not already earned
+    if (!user.badges.some(b => b.name === 'Savings Hero')) {
+      user.badges.push({ name: 'Savings Hero', icon: '💎', earnedAt: new Date() });
     }
-  });
-  if (goalCompleted) {
-    await user.save();
   }
+});
+if (goalCompleted) {
+  await user.save();
+}
 
   const activeGoals = user.savingsGoals
     .filter((g) => !g.isCompleted)
@@ -742,7 +747,14 @@ app.post('/api/finance/expense', authMiddleware, async (req, res) => {
       //   activeGoal.isCompleted = false;
       // }
     }
-    //await addXP(user._id, 10, 'Expense tracked');
+    await addXP(user._id, 10, 'Expense tracked');
+    user.trackedExpenses = (user.trackedExpenses || 0) + 1;
+if (user.trackedExpenses === 10) {
+  user.badges.push({ name: 'Expense Novice', icon: '💸', earnedAt: new Date() });
+}
+if (user.trackedExpenses === 50) {
+  user.badges.push({ name: 'Expense Pro', icon: '💰', earnedAt: new Date() });
+}
 
     await user.save();
 
@@ -920,6 +932,9 @@ app.post('/api/streak', authMiddleware, async (req, res) => {
       message: 'Server error updating streak',
     });
   }
+  if (user.streak === 7 && !user.badges.some(b => b.name === 'Streak Master')) {
+  user.badges.push({ name: 'Streak Master', icon: '🔥', earnedAt: new Date() });
+}
 });
 
 // 🧠 AI Assistant Routes

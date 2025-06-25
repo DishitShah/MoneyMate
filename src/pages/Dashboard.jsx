@@ -944,7 +944,7 @@ const goalAchieved = goalTarget > 0 && goalCurrent >= goalTarget;
               <span>{currentStep}/4</span>
             </div>
             <div className="xp-bar" style={{ marginBottom: "2rem" }}>
-              <div className="xp-progress" style={{ width: `${(currentStep / 5) * 100}%` }}></div>
+              <div className="xp-progress" style={{ width: `${(currentStep / 4) * 100}%` }}></div>
             </div>
             {/* Form Step */}
             {(() => {
