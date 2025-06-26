@@ -1355,6 +1355,68 @@ app.get('/api/analytics', authMiddleware, async (req, res) => {
     });
   }
 });
+// --- Personalized Smart Suggestions Endpoint ---
+app.get('/api/suggestions', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    // Extract user data for suggestions
+    const { transactions = [], savingsGoals = [], currentBalance = 0, monthlyBudget = 0 } = user;
+
+    // Example: Find biggest expense category this month
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    const thisMonthExpenses = transactions.filter(
+      t => t.type === 'expense' && new Date(t.date) >= monthStart
+    );
+    const categoryTotals = {};
+    thisMonthExpenses.forEach(t => {
+      categoryTotals[t.category] = (categoryTotals[t.category] || 0) + t.amount;
+    });
+    const biggestExpense = Object.entries(categoryTotals)
+      .sort((a, b) => b[1] - a[1])[0];
+
+    // Example: Progress toward first active goal
+    const mainGoal = savingsGoals.find(g => !g.isCompleted);
+    const goalProgress = mainGoal
+      ? `You're ${Math.round((mainGoal.currentSaved / mainGoal.targetAmount) * 100)}% towards your "${mainGoal.goalName}" goal!`
+      : null;
+
+    // Example: Budget status
+    const totalExpenses = thisMonthExpenses.reduce((sum, t) => sum + t.amount, 0);
+    const budgetLeft = monthlyBudget - totalExpenses;
+    let budgetTip = '';
+    if (monthlyBudget > 0) {
+      if (budgetLeft < monthlyBudget * 0.2) {
+        budgetTip = "⚠️ You're close to your monthly budget limit!";
+      } else {
+        budgetTip = "✅ Great job staying within budget!";
+      }
+    }
+
+    // Build suggestions array
+    const suggestions = [];
+    if (biggestExpense) {
+      suggestions.push(
+        `Your biggest expense this month is "${biggestExpense[0]}" (₹${biggestExpense[1]}). Consider setting a limit or tracking it closely!`
+      );
+    }
+    if (goalProgress) suggestions.push(goalProgress);
+    if (budgetTip) suggestions.push(budgetTip);
+
+    // Fallback if no data
+    if (suggestions.length === 0) {
+      suggestions.push("Track more expenses and set savings goals to get smarter suggestions! 🚀");
+    }
+
+    res.json({ success: true, suggestions });
+  } catch (error) {
+    console.error('🔴 Suggestions Error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error fetching suggestions' });
+  }
+});
 
 // 🚫 Error Handling Middleware
 app.use((err, req, res, next) => {

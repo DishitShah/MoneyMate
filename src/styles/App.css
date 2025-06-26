@@ -698,7 +698,7 @@ body {
   content: '💡';
   position: absolute;
   top: 1rem;
-  right: 1rem;
+  right: 0.01rem;
   font-size: 1.5rem;
   animation: lightbulb 2s ease-in-out infinite;
 }
