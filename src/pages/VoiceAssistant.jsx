@@ -2,9 +2,9 @@ import React, { useState, useRef } from 'react';
 
 const VoiceAssistant = () => {
   const [isListening, setIsListening] = useState(false);
-  const [voiceStatus, setVoiceStatus] = useState('Tap the microphone to start speaking');
   const [transcript, setTranscript] = useState('');
   const [aiAnswer, setAiAnswer] = useState('');
+  const [error, setError] = useState('');
   const audioRef = useRef(null);
 
   // Use Web Speech API for speech-to-text
@@ -13,12 +13,12 @@ const VoiceAssistant = () => {
 
     setTranscript('');
     setAiAnswer('');
+    setError('');
     setIsListening(true);
-    setVoiceStatus('Listening... Speak now!');
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setVoiceStatus('Sorry, your browser does not support speech recognition.');
+      setError('Sorry, your browser does not support speech recognition.');
       setIsListening(false);
       return;
     }
@@ -31,12 +31,11 @@ const VoiceAssistant = () => {
       const text = event.results[0][0].transcript;
       setTranscript(text);
       setIsListening(false);
-      setVoiceStatus('Processing your request...');
       await getAIResponse(text);
     };
-    recognition.onerror = (event) => {
+    recognition.onerror = () => {
       setIsListening(false);
-      setVoiceStatus('Could not recognize speech. Try again!');
+      setError('Could not recognize speech. Try again!');
     };
     recognition.onend = () => {
       setIsListening(false);
@@ -60,19 +59,19 @@ const VoiceAssistant = () => {
       const data = await res.json();
       if (data.success) {
         setAiAnswer(data.answer);
-        setVoiceStatus('💬 ' + data.answer);
+        setError('');
         // Play audio
-        if (audioRef.current) {
-          audioRef.current.pause();
-        }
+        if (audioRef.current) audioRef.current.pause();
         const audio = new Audio(data.audio);
         audioRef.current = audio;
         audio.play();
       } else {
-        setVoiceStatus(data.message || 'Something went wrong.');
+        setAiAnswer('');
+        setError('Voice assistant error');
       }
     } catch (err) {
-      setVoiceStatus('Error getting AI response. Try again.');
+      setAiAnswer('');
+      setError('Voice assistant error');
     }
   };
 
@@ -80,7 +79,7 @@ const VoiceAssistant = () => {
   const handleSuggestionClick = async (suggestion) => {
     setTranscript(suggestion);
     setAiAnswer('');
-    setVoiceStatus('Processing: "' + suggestion + '"');
+    setError('');
     await getAIResponse(suggestion);
   };
 
@@ -118,12 +117,24 @@ const VoiceAssistant = () => {
           {isListening ? '🔴' : '🎤'}
         </div>
 
-        <div style={{ margin: '1rem 0', fontSize: '1.1rem', opacity: 0.8 }}>
-          <b>{transcript}</b>
-        </div>
-        <div style={{ marginBottom: '2rem', fontSize: '1.2rem', opacity: 0.8 }}>
-          {voiceStatus}
-        </div>
+        {/* User transcript */}
+        {transcript && (
+          <div style={{ margin: '1rem 0', fontSize: '1.1rem', opacity: 0.9 }}>
+            <b>{transcript}</b>
+          </div>
+        )}
+
+        {/* AI Answer or Error */}
+        {aiAnswer && (
+          <div style={{ marginBottom: '2rem', fontSize: '1.2rem', opacity: 0.85 }}>
+            {aiAnswer}
+          </div>
+        )}
+        {error && (
+          <div style={{ marginBottom: '2rem', fontSize: '1.2rem', color: '#ff4757', opacity: 0.85 }}>
+            {error}
+          </div>
+        )}
 
         <div className="suggestion-chips">
           {suggestions.map((suggestion, index) => (

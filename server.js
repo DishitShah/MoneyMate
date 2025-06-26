@@ -16,7 +16,7 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 
 dotenv.config();
 const app = express();
-
+const LLM_MODEL = process.env.LLM_MODEL || 'llama3-70b-8192'; // Or another Groq-supported model
 // 🛡️ Middleware
 app.use(
   cors({
@@ -1107,11 +1107,13 @@ app.post('/api/voice', authMiddleware, async (req, res) => {
   }
 });
 
-// --- Voice Assistant Combo Endpoint ---
+// --- Voice Assistant Combo Endpoint with Detailed Error Logging ---
 app.post('/api/voice-assistant', authMiddleware, async (req, res) => {
   try {
     const { question } = req.body;
-    if (!question) return res.status(400).json({ success: false, message: 'Please provide a question' });
+    if (!question) {
+      return res.status(400).json({ success: false, message: 'Please provide a question' });
+    }
 
     const user = await User.findById(req.user._id);
 
@@ -1119,12 +1121,20 @@ app.post('/api/voice-assistant', authMiddleware, async (req, res) => {
     const recentTransactions = user.transactions
       .sort((a, b) => new Date(b.date) - new Date(a.date))
       .slice(0, 5)
-      .map(t => `${t.type}: ₹${t.amount} for ${t.category} (${t.description}) on ${new Date(t.date).toLocaleDateString()}`)
+      .map(
+        (t) =>
+          `${t.type}: ₹${t.amount} for ${t.category} (${t.description}) on ${new Date(t.date).toLocaleDateString()}`
+      )
       .join(', ');
 
     const activeGoals = user.savingsGoals
-      .filter(g => !g.isCompleted)
-      .map(g => `${g.goalName} (₹${g.currentSaved}/₹${g.targetAmount}, target: ${new Date(g.targetDate).toLocaleDateString()})`)
+      .filter((g) => !g.isCompleted)
+      .map(
+        (g) =>
+          `${g.goalName} (₹${g.currentSaved}/₹${g.targetAmount}, target: ${new Date(
+            g.targetDate
+          ).toLocaleDateString()})`
+      )
       .join(', ');
 
     const context = `
@@ -1148,50 +1158,91 @@ User Question: ${question}
 
 Respond as MoneyMate:`;
 
-    // 1. Get AI answer from OpenAI
-    const openAiRes = await axios.post(
-      'https://api.openai.com/v1/chat/completions',
-      {
-        model: 'gpt-3.5-turbo',
-        messages: [
-          { role: 'system', content: prompt },
-          { role: 'user', content: question }
-        ],
-        max_tokens: 150,
-        temperature: 0.7,
+   let aiAnswer;
+let groqRes;
+try {
+  groqRes = await axios.post(
+    'https://api.groq.com/openai/v1/chat/completions',
+    {
+      model: LLM_MODEL, // e.g. 'llama3-70b-8192'
+      messages: [
+        { role: 'system', content: prompt },
+        { role: 'user', content: question }
+      ],
+      max_tokens: 150,
+      temperature: 0.7,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        'Content-Type': 'application/json',
       },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-    const aiAnswer = openAiRes.data.choices[0].message.content;
+    }
+  );
+  aiAnswer = groqRes.data?.choices?.[0]?.message?.content;
+} catch (groqError) {
+  if (groqError.response) {
+    console.error('🔴 Groq API Error:', groqError.response.data);
+    if (groqError.response.status === 401) {
+      return res.status(500).json({ success: false, message: 'Groq API key is invalid or unauthorized.' });
+    }
+    if (groqError.response.status === 429) {
+      return res.status(500).json({ success: false, message: 'Groq quota exceeded or rate limited.' });
+    }
+    return res.status(500).json({ success: false, message: 'Groq error: ' + (groqError.response.data.error?.message || 'Unknown error') });
+  } else {
+    console.error('🔴 Groq Error:', groqError.message);
+    return res.status(500).json({ success: false, message: 'Groq error: ' + groqError.message });
+  }
+}
 
-    // 2. Get audio from ElevenLabs
-    const voiceRes = await axios.post(
-      'https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL',
-      {
-        text: aiAnswer.substring(0, 500),
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+if (!aiAnswer) {
+  console.error('Groq API did not return a valid answer:', groqRes?.data);
+  return res.status(500).json({ success: false, message: 'AI did not return a valid response.' });
+}
+
+// 2. Get audio from ElevenLabs
+let audioUrl;
+try {
+  const voiceRes = await axios.post(
+    'https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL',
+    {
+      text: aiAnswer.substring(0, 500),
+      voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+    },
+    {
+      headers: {
+        'xi-api-key': process.env.ELEVENLABS_API_KEY,
+        'Content-Type': 'application/json',
       },
-      {
-        headers: {
-          'xi-api-key': process.env.ELEVENLABS_API_KEY,
-          'Content-Type': 'application/json',
-        },
-        responseType: 'arraybuffer',
-      }
-    );
-    const audioBase64 = Buffer.from(voiceRes.data).toString('base64');
-    const audioUrl = `data:audio/mpeg;base64,${audioBase64}`;
+      responseType: 'arraybuffer',
+    }
+  );
+  const audioBase64 = Buffer.from(voiceRes.data).toString('base64');
+  audioUrl = `data:audio/mpeg;base64,${audioBase64}`;
+} catch (elevenLabsError) {
+  if (elevenLabsError.response) {
+    console.error('🔴 ElevenLabs Error:', elevenLabsError.response.data);
+    if (elevenLabsError.response.status === 401) {
+      return res.status(500).json({ success: false, message: 'ElevenLabs API key is invalid or unauthorized.' });
+    }
+    if (elevenLabsError.response.status === 429) {
+      return res.status(500).json({ success: false, message: 'ElevenLabs quota exceeded or rate limited.' });
+    }
+    return res.status(500).json({ success: false, message: 'ElevenLabs error: ' + (elevenLabsError.response.data.detail || 'Unknown error') });
+  } else {
+    console.error('🔴 ElevenLabs Error:', elevenLabsError.message);
+    return res.status(500).json({ success: false, message: 'ElevenLabs error: ' + elevenLabsError.message });
+  }
+}
+
+// ...rest of your success response logic
 
     await addXP(user._id, 5, 'AI Voice interaction');
 
     res.json({ success: true, answer: aiAnswer, audio: audioUrl });
   } catch (error) {
-    console.error('🔴 Voice Assistant Error:', error.message);
+    console.error('🔴 Voice Assistant Unexpected Error:', error.message || error);
     res.status(500).json({ success: false, message: 'Voice assistant error' });
   }
 });
