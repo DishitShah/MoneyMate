@@ -117,7 +117,7 @@ const Analytics = () => {
       <div className="insight-card">
         <h3>🍕 Top Spending Category</h3>
         <p>
-          Most spent on <b>{top.category}</b>: ₹{top.amount.toLocaleString()} ({top.percentage ? top.percentage.toFixed(1) : 0}%)
+          Most spent on <b>{top.category}</b>: ${top.amount.toLocaleString()} ({top.percentage ? top.percentage.toFixed(1) : 0}%)
         </p>
       </div>
     );
@@ -253,7 +253,7 @@ const Analytics = () => {
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip formatter={(value, name) => [`₹${value}`, name]} />
+              <Tooltip formatter={(value, name) => [`$${value}`, name]} />
             </PieChart>
             {/* Labels on the right */}
             <div>
@@ -270,7 +270,7 @@ const Analytics = () => {
                     }}
                   ></span>
                   <span>
-                    {item.category} - ₹{item.amount?.toLocaleString ? item.amount.toLocaleString() : item.amount} ({item.percentage}%)
+                    {item.category} - ${item.amount?.toLocaleString ? item.amount.toLocaleString() : item.amount} ({item.percentage}%)
                   </span>
                 </div>
               ))}

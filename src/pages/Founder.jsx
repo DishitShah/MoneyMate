@@ -53,7 +53,7 @@ const Founder = () => {
 MoneyMate wasn’t just an idea — it was a challenge. As a final-year student at Ahmedabad University, I came across the Bolt.new global hackathon and saw a unique opportunity: build something that actually helps my generation manage money better. That challenge lit the fuse. I knew I didn’t want to build another boring finance tracker — I wanted to build a buddy.
           </p>
           <p style={{ opacity: 0.8, lineHeight: 1.6, marginBottom: '1rem' }}>
-With a love for frontend design, gamification, and voice tech, I poured my energy into building something Gen Z would enjoy using. What started as a weekend experiment became MoneyMate — an app that understands your impulsive Swiggy orders, keeps track like a smart friend, and celebrates every ₹100 saved.
+With a love for frontend design, gamification, and voice tech, I poured my energy into building something Gen Z would enjoy using. What started as a weekend experiment became MoneyMate — an app that understands your impulsive Swiggy orders, keeps track like a smart friend, and celebrates every $100 saved.
           </p>
           <p style={{ opacity: 0.8, lineHeight: 1.6, marginBottom: '1rem' }}>
 From sketching wireframes in Figma to deploying full-stack code in Bolt.new, I’ve worn every hat. MoneyMate came to life during the Bolt.new competition, and that one push from the community helped turn a raw idea into a working prototype. I’m incredibly grateful to Bolt.new for giving me that launchpad.

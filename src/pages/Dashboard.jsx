@@ -34,7 +34,7 @@ const TransactionModal = ({
           {type === "income" ? "➕ Add Income" : "➖ Add Expense"}
         </h2>
         <div className="form-group">
-          <label className="form-label">Amount (₹)</label>
+          <label className="form-label">Amount ($)</label>
           <input
             type="number"
             className="form-input"
@@ -112,7 +112,7 @@ const SavingsGoalCard = ({
           fontWeight: "bold",
           color: "#00ff88"
         }}>
-          ₹{goalCurrent?.toLocaleString() ?? 0} / ₹{goalTarget?.toLocaleString() ?? 0}
+          ${goalCurrent?.toLocaleString() ?? 0} / ${goalTarget?.toLocaleString() ?? 0}
         </div>
         <div style={{ opacity: 0.8 }}>
           {goalPercent}% Complete
@@ -253,7 +253,7 @@ const SetNewGoalCard = ({ onSave }) => {
             <input
               type="number"
               min="1"
-              placeholder="₹ Amount"
+              placeholder="$ Amount"
               value={targetAmount}
               onChange={e => setTargetAmount(e.target.value)}
               className="form-input"
@@ -848,7 +848,7 @@ const goalAchieved = goalTarget > 0 && goalCurrent >= goalTarget;
     <div className="meter-circle" style={{ background: meterGradient }}>
       <div className="meter-inner">
         <div style={{ fontSize: "2rem", fontWeight: "bold", color: "#00ff88" }}>
-          ₹{userData.budgetValue?.toLocaleString() ?? 0}
+          ${userData.budgetValue?.toLocaleString() ?? 0}
         </div>
         <div style={{ opacity: 0.7, fontSize: "1rem" }}>
           Remaining
@@ -1010,14 +1010,14 @@ const goalAchieved = goalTarget > 0 && goalCurrent >= goalTarget;
             </p>
             <div className="option-grid">
               {[
-                "₹0 – ₹500",
-                "₹500 – ₹1,000",
-                "₹1,000 – ₹3,000",
-                "₹3,000 – ₹5,000",
-                "₹5,000 – ₹10,000",
-                "₹10,000 – ₹25,000",
-                "₹25,000 – ₹50,000",
-                "₹50,000+",
+                "$0 – $500",
+                "$500 – $1,000",
+                "$1,000 – $3,000",
+                "$3,000 – $5,000",
+                "$5,000 – $10,000",
+                "$10,000 – $25,000",
+                "$25,000 – $50,000",
+                "$50,000+",
               ].map((income) => (
                 <div
                   key={income}

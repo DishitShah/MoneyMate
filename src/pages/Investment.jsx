@@ -12,7 +12,7 @@ const Investment = () => {
       riskColor: 'rgba(0, 255, 136, 0.2)',
       description: 'Diversified portfolio with 12% average annual returns',
       riskPosition: '25%',
-      minInvestment: '₹500',
+      minInvestment: '$500',
       returns: '+12% Returns',
       returnsColor: '#00ff88'
     },
@@ -23,7 +23,7 @@ const Investment = () => {
       riskColor: 'rgba(255, 217, 61, 0.2)',
       description: 'Digital gold investment with high liquidity',
       riskPosition: '50%',
-      minInvestment: '₹100',
+      minInvestment: '$100',
       returns: '+8% Returns',
       returnsColor: '#ffd93d'
     },
@@ -34,7 +34,7 @@ const Investment = () => {
       riskColor: 'rgba(255, 107, 107, 0.2)',
       description: 'Invest in top US companies like Apple, Google',
       riskPosition: '75%',
-      minInvestment: '₹1,000',
+      minInvestment: '$1,000',
       returns: '+15% Returns',
       returnsColor: '#ff6b6b'
     },
@@ -45,7 +45,7 @@ const Investment = () => {
       riskColor: 'rgba(0, 255, 136, 0.2)',
       description: 'Systematic Investment Plan for steady growth',
       riskPosition: '30%',
-      minInvestment: '₹500/month',
+      minInvestment: '$500/month',
       returns: '+10% Returns',
       returnsColor: '#00ff88'
     }
@@ -64,7 +64,7 @@ const Investment = () => {
         <div className="insight-card" style={{ maxWidth: '600px', margin: '0 auto 3rem' }}>
           <h3 style={{ marginBottom: '1rem' }}>🤖 AI Recommendation</h3>
           <p>
-            "You've saved ₹5,000 this month! Consider investing ₹2,000 in a balanced mutual fund for long-term growth."
+            "You've saved $5,000 this month! Consider investing $2,000 in a balanced mutual fund for long-term growth."
           </p>
         </div>
       </div>

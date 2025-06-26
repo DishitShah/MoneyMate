@@ -15,7 +15,8 @@ import OAuthHandler from './pages/OAuthHandler';
 import Footer from './components/Footer';
 import Particles from './components/Particles';
 import FloatingActionButton from './components/FloatingActionButton';
-import MoneyMateComingSoon from './components/MoneyMetComingSoon';
+import MoneyMateComingSoon from './components/MoneyMateComingSoon';
+import BoltNew from './pages/BoltNew';
 import './styles/App.css';
 
 // --- GLOBAL SCROLL TO TOP COMPONENT ---
@@ -47,6 +48,7 @@ function App() {
           <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
           <Route path="/founder" element={<PrivateRoute><Founder /></PrivateRoute>} />
           <Route path='/coming-soon' element={<PrivateRoute><MoneyMateComingSoon/></PrivateRoute>} />
+          <Route path="/bolt-new" element={<BoltNew />} />
         </Routes>
         <Footer />
         <FloatingActionButton />
